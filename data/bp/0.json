@@ -1,0 +1,602 @@
+[
+    {
+        "observation_id": "3161721",
+        "phenomenon_time": "2026-07-03T12:00:03Z",
+        "result_time": "2026-07-03T12:00:03Z",
+        "result": 2435.316
+    },
+    {
+        "observation_id": "3159880",
+        "phenomenon_time": "2026-07-03T11:30:03Z",
+        "result_time": "2026-07-03T11:30:03Z",
+        "result": 2436.3438
+    },
+    {
+        "observation_id": "3158491",
+        "phenomenon_time": "2026-07-03T11:00:03Z",
+        "result_time": "2026-07-03T11:00:03Z",
+        "result": 2438.39
+    },
+    {
+        "observation_id": "3156947",
+        "phenomenon_time": "2026-07-03T10:30:03Z",
+        "result_time": "2026-07-03T10:30:03Z",
+        "result": 2439.449
+    },
+    {
+        "observation_id": "3154591",
+        "phenomenon_time": "2026-07-03T10:00:03Z",
+        "result_time": "2026-07-03T10:00:03Z",
+        "result": 2441.458
+    },
+    {
+        "observation_id": "3152707",
+        "phenomenon_time": "2026-07-03T09:30:03Z",
+        "result_time": "2026-07-03T09:30:03Z",
+        "result": 2443.656
+    },
+    {
+        "observation_id": "3151381",
+        "phenomenon_time": "2026-07-03T09:00:03Z",
+        "result_time": "2026-07-03T09:00:03Z",
+        "result": 2444.826
+    },
+    {
+        "observation_id": "3151105",
+        "phenomenon_time": "2026-07-03T08:30:03Z",
+        "result_time": "2026-07-03T08:30:03Z",
+        "result": 2446.105
+    },
+    {
+        "observation_id": "3145853",
+        "phenomenon_time": "2026-07-03T07:00:03Z",
+        "result_time": "2026-07-03T07:00:03Z",
+        "result": 2449.9263
+    },
+    {
+        "observation_id": "3144259",
+        "phenomenon_time": "2026-07-03T06:30:03Z",
+        "result_time": "2026-07-03T06:30:03Z",
+        "result": 2450.9834
+    },
+    {
+        "observation_id": "3142646",
+        "phenomenon_time": "2026-07-03T06:00:03Z",
+        "result_time": "2026-07-03T06:00:03Z",
+        "result": 2451.8875
+    },
+    {
+        "observation_id": "3140548",
+        "phenomenon_time": "2026-07-03T05:30:03Z",
+        "result_time": "2026-07-03T05:30:03Z",
+        "result": 2452.5112
+    },
+    {
+        "observation_id": "3138511",
+        "phenomenon_time": "2026-07-03T05:00:03Z",
+        "result_time": "2026-07-03T05:00:03Z",
+        "result": 2453.2437
+    },
+    {
+        "observation_id": "3134908",
+        "phenomenon_time": "2026-07-03T03:30:03Z",
+        "result_time": "2026-07-03T03:30:03Z",
+        "result": 2454.9858
+    },
+    {
+        "observation_id": "3132386",
+        "phenomenon_time": "2026-07-03T02:30:03Z",
+        "result_time": "2026-07-03T02:30:03Z",
+        "result": 2456.8567
+    },
+    {
+        "observation_id": "3131074",
+        "phenomenon_time": "2026-07-03T02:00:03Z",
+        "result_time": "2026-07-03T02:00:03Z",
+        "result": 2458.061
+    },
+    {
+        "observation_id": "3129487",
+        "phenomenon_time": "2026-07-03T01:30:03Z",
+        "result_time": "2026-07-03T01:30:03Z",
+        "result": 2459.605
+    },
+    {
+        "observation_id": "3126981",
+        "phenomenon_time": "2026-07-03T00:30:03Z",
+        "result_time": "2026-07-03T00:30:03Z",
+        "result": 2463.1272
+    },
+    {
+        "observation_id": "3125433",
+        "phenomenon_time": "2026-07-03T00:00:03Z",
+        "result_time": "2026-07-03T00:00:03Z",
+        "result": 2465.5808
+    },
+    {
+        "observation_id": "3123756",
+        "phenomenon_time": "2026-07-02T23:30:03Z",
+        "result_time": "2026-07-02T23:30:03Z",
+        "result": 2468.2437
+    },
+    {
+        "observation_id": "3121882",
+        "phenomenon_time": "2026-07-02T23:00:03Z",
+        "result_time": "2026-07-02T23:00:03Z",
+        "result": 2470.6643
+    },
+    {
+        "observation_id": "3120735",
+        "phenomenon_time": "2026-07-02T22:30:03Z",
+        "result_time": "2026-07-02T22:30:03Z",
+        "result": 2473.169
+    },
+    {
+        "observation_id": "3119482",
+        "phenomenon_time": "2026-07-02T22:00:03Z",
+        "result_time": "2026-07-02T22:00:03Z",
+        "result": 2474.1975
+    },
+    {
+        "observation_id": "3118239",
+        "phenomenon_time": "2026-07-02T21:30:03Z",
+        "result_time": "2026-07-02T21:30:03Z",
+        "result": 2475.459
+    },
+    {
+        "observation_id": "3116258",
+        "phenomenon_time": "2026-07-02T21:00:03Z",
+        "result_time": "2026-07-02T21:00:03Z",
+        "result": 2475.8416
+    },
+    {
+        "observation_id": "3114558",
+        "phenomenon_time": "2026-07-02T20:30:03Z",
+        "result_time": "2026-07-02T20:30:03Z",
+        "result": 2476.3413
+    },
+    {
+        "observation_id": "3112884",
+        "phenomenon_time": "2026-07-02T20:00:03Z",
+        "result_time": "2026-07-02T20:00:03Z",
+        "result": 2476.728
+    },
+    {
+        "observation_id": "3111079",
+        "phenomenon_time": "2026-07-02T19:30:03Z",
+        "result_time": "2026-07-02T19:30:03Z",
+        "result": 2476.3728
+    },
+    {
+        "observation_id": "3109465",
+        "phenomenon_time": "2026-07-02T19:00:03Z",
+        "result_time": "2026-07-02T19:00:03Z",
+        "result": 2475.5288
+    },
+    {
+        "observation_id": "3107819",
+        "phenomenon_time": "2026-07-02T18:30:03Z",
+        "result_time": "2026-07-02T18:30:03Z",
+        "result": 2474.0664
+    },
+    {
+        "observation_id": "3106033",
+        "phenomenon_time": "2026-07-02T18:00:03Z",
+        "result_time": "2026-07-02T18:00:03Z",
+        "result": 2471.9531
+    },
+    {
+        "observation_id": "3104714",
+        "phenomenon_time": "2026-07-02T17:30:03Z",
+        "result_time": "2026-07-02T17:30:03Z",
+        "result": 2469.9033
+    },
+    {
+        "observation_id": "3102618",
+        "phenomenon_time": "2026-07-02T17:00:03Z",
+        "result_time": "2026-07-02T17:00:03Z",
+        "result": 2467.6272
+    },
+    {
+        "observation_id": "3101344",
+        "phenomenon_time": "2026-07-02T16:30:03Z",
+        "result_time": "2026-07-02T16:30:03Z",
+        "result": 2464.6614
+    },
+    {
+        "observation_id": "3099557",
+        "phenomenon_time": "2026-07-02T16:00:03Z",
+        "result_time": "2026-07-02T16:00:03Z",
+        "result": 2462.0137
+    },
+    {
+        "observation_id": "3098286",
+        "phenomenon_time": "2026-07-02T15:30:03Z",
+        "result_time": "2026-07-02T15:30:03Z",
+        "result": 2458.8018
+    },
+    {
+        "observation_id": "3096783",
+        "phenomenon_time": "2026-07-02T15:00:03Z",
+        "result_time": "2026-07-02T15:00:03Z",
+        "result": 2456.616
+    },
+    {
+        "observation_id": "3095237",
+        "phenomenon_time": "2026-07-02T14:30:03Z",
+        "result_time": "2026-07-02T14:30:03Z",
+        "result": 2453.8386
+    },
+    {
+        "observation_id": "3093509",
+        "phenomenon_time": "2026-07-02T14:00:03Z",
+        "result_time": "2026-07-02T14:00:03Z",
+        "result": 2452.5872
+    },
+    {
+        "observation_id": "3091796",
+        "phenomenon_time": "2026-07-02T13:30:03Z",
+        "result_time": "2026-07-02T13:30:03Z",
+        "result": 2451.008
+    },
+    {
+        "observation_id": "3089160",
+        "phenomenon_time": "2026-07-02T12:30:03Z",
+        "result_time": "2026-07-02T12:30:03Z",
+        "result": 2448.9624
+    },
+    {
+        "observation_id": "3088142",
+        "phenomenon_time": "2026-07-02T12:00:03Z",
+        "result_time": "2026-07-02T12:00:03Z",
+        "result": 2449.3906
+    },
+    {
+        "observation_id": "3086410",
+        "phenomenon_time": "2026-07-02T11:30:03Z",
+        "result_time": "2026-07-02T11:30:03Z",
+        "result": 2450.463
+    },
+    {
+        "observation_id": "3084412",
+        "phenomenon_time": "2026-07-02T11:00:03Z",
+        "result_time": "2026-07-02T11:00:03Z",
+        "result": 2451.1814
+    },
+    {
+        "observation_id": "3082728",
+        "phenomenon_time": "2026-07-02T10:30:03Z",
+        "result_time": "2026-07-02T10:30:03Z",
+        "result": 2452.4578
+    },
+    {
+        "observation_id": "3081042",
+        "phenomenon_time": "2026-07-02T10:00:03Z",
+        "result_time": "2026-07-02T10:00:03Z",
+        "result": 2454.4768
+    },
+    {
+        "observation_id": "3079170",
+        "phenomenon_time": "2026-07-02T09:30:03Z",
+        "result_time": "2026-07-02T09:30:03Z",
+        "result": 2456.4458
+    },
+    {
+        "observation_id": "3077285",
+        "phenomenon_time": "2026-07-02T09:00:03Z",
+        "result_time": "2026-07-02T09:00:03Z",
+        "result": 2458.7888
+    },
+    {
+        "observation_id": "3075310",
+        "phenomenon_time": "2026-07-02T08:30:03Z",
+        "result_time": "2026-07-02T08:30:03Z",
+        "result": 2460.6582
+    },
+    {
+        "observation_id": "3073673",
+        "phenomenon_time": "2026-07-02T08:00:03Z",
+        "result_time": "2026-07-02T08:00:03Z",
+        "result": 2461.873
+    },
+    {
+        "observation_id": "3072191",
+        "phenomenon_time": "2026-07-02T07:30:03Z",
+        "result_time": "2026-07-02T07:30:03Z",
+        "result": 2463.8618
+    },
+    {
+        "observation_id": "3067451",
+        "phenomenon_time": "2026-07-02T05:30:03Z",
+        "result_time": "2026-07-02T05:30:03Z",
+        "result": 2467.934
+    },
+    {
+        "observation_id": "3065994",
+        "phenomenon_time": "2026-07-02T05:00:03Z",
+        "result_time": "2026-07-02T05:00:03Z",
+        "result": 2468.3823
+    },
+    {
+        "observation_id": "3064143",
+        "phenomenon_time": "2026-07-02T04:30:03Z",
+        "result_time": "2026-07-02T04:30:03Z",
+        "result": 2468.1772
+    },
+    {
+        "observation_id": "3062461",
+        "phenomenon_time": "2026-07-02T04:00:03Z",
+        "result_time": "2026-07-02T04:00:03Z",
+        "result": 2467.9126
+    },
+    {
+        "observation_id": "3060632",
+        "phenomenon_time": "2026-07-02T03:30:03Z",
+        "result_time": "2026-07-02T03:30:03Z",
+        "result": 2467.775
+    },
+    {
+        "observation_id": "3058938",
+        "phenomenon_time": "2026-07-02T03:00:03Z",
+        "result_time": "2026-07-02T03:00:03Z",
+        "result": 2467.5378
+    },
+    {
+        "observation_id": "3057513",
+        "phenomenon_time": "2026-07-02T02:30:03Z",
+        "result_time": "2026-07-02T02:30:03Z",
+        "result": 2467.4504
+    },
+    {
+        "observation_id": "3055173",
+        "phenomenon_time": "2026-07-02T01:30:03Z",
+        "result_time": "2026-07-02T01:30:03Z",
+        "result": 2467.174
+    },
+    {
+        "observation_id": "3053228",
+        "phenomenon_time": "2026-07-02T01:00:03Z",
+        "result_time": "2026-07-02T01:00:03Z",
+        "result": 2467.8235
+    },
+    {
+        "observation_id": "3051494",
+        "phenomenon_time": "2026-07-02T00:30:03Z",
+        "result_time": "2026-07-02T00:30:03Z",
+        "result": 2468.9333
+    },
+    {
+        "observation_id": "3049424",
+        "phenomenon_time": "2026-07-02T00:00:03Z",
+        "result_time": "2026-07-02T00:00:03Z",
+        "result": 2469.8237
+    },
+    {
+        "observation_id": "3047674",
+        "phenomenon_time": "2026-07-01T23:30:03Z",
+        "result_time": "2026-07-01T23:30:03Z",
+        "result": 2471.0413
+    },
+    {
+        "observation_id": "3045835",
+        "phenomenon_time": "2026-07-01T23:00:03Z",
+        "result_time": "2026-07-01T23:00:03Z",
+        "result": 2472.5217
+    },
+    {
+        "observation_id": "3043823",
+        "phenomenon_time": "2026-07-01T22:30:03Z",
+        "result_time": "2026-07-01T22:30:03Z",
+        "result": 2473.9275
+    },
+    {
+        "observation_id": "3041455",
+        "phenomenon_time": "2026-07-01T21:30:03Z",
+        "result_time": "2026-07-01T21:30:03Z",
+        "result": 2476.5984
+    },
+    {
+        "observation_id": "3036820",
+        "phenomenon_time": "2026-07-01T19:30:03Z",
+        "result_time": "2026-07-01T19:30:03Z",
+        "result": 2483.1912
+    },
+    {
+        "observation_id": "3035084",
+        "phenomenon_time": "2026-07-01T19:00:03Z",
+        "result_time": "2026-07-01T19:00:03Z",
+        "result": 2483.9214
+    },
+    {
+        "observation_id": "3033732",
+        "phenomenon_time": "2026-07-01T18:30:03Z",
+        "result_time": "2026-07-01T18:30:03Z",
+        "result": 2483.6763
+    },
+    {
+        "observation_id": "3031796",
+        "phenomenon_time": "2026-07-01T18:00:03Z",
+        "result_time": "2026-07-01T18:00:03Z",
+        "result": 2483.8433
+    },
+    {
+        "observation_id": "3030172",
+        "phenomenon_time": "2026-07-01T17:30:03Z",
+        "result_time": "2026-07-01T17:30:03Z",
+        "result": 2483.444
+    },
+    {
+        "observation_id": "3028585",
+        "phenomenon_time": "2026-07-01T17:00:03Z",
+        "result_time": "2026-07-01T17:00:03Z",
+        "result": 2482.3394
+    },
+    {
+        "observation_id": "3026214",
+        "phenomenon_time": "2026-07-01T16:00:03Z",
+        "result_time": "2026-07-01T16:00:03Z",
+        "result": 2479.6636
+    },
+    {
+        "observation_id": "3023221",
+        "phenomenon_time": "2026-07-01T15:00:03Z",
+        "result_time": "2026-07-01T15:00:03Z",
+        "result": 2477.996
+    },
+    {
+        "observation_id": "3022056",
+        "phenomenon_time": "2026-07-01T14:30:03Z",
+        "result_time": "2026-07-01T14:30:03Z",
+        "result": 2476.4595
+    },
+    {
+        "observation_id": "3021971",
+        "phenomenon_time": "2026-07-01T13:30:03Z",
+        "result_time": "2026-07-01T13:30:03Z",
+        "result": 2474.4893
+    },
+    {
+        "observation_id": "3021879",
+        "phenomenon_time": "2026-07-01T13:00:03Z",
+        "result_time": "2026-07-01T13:00:03Z",
+        "result": 2474.2737
+    },
+    {
+        "observation_id": "3021825",
+        "phenomenon_time": "2026-07-01T12:30:03Z",
+        "result_time": "2026-07-01T12:30:03Z",
+        "result": 2474.3577
+    },
+    {
+        "observation_id": "3010907",
+        "phenomenon_time": "2026-07-01T11:00:03Z",
+        "result_time": "2026-07-01T11:00:03Z",
+        "result": 2478.1511
+    },
+    {
+        "observation_id": "3009074",
+        "phenomenon_time": "2026-07-01T10:30:03Z",
+        "result_time": "2026-07-01T10:30:03Z",
+        "result": 2481.0508
+    },
+    {
+        "observation_id": "3007311",
+        "phenomenon_time": "2026-07-01T10:00:03Z",
+        "result_time": "2026-07-01T10:00:03Z",
+        "result": 2483.7812
+    },
+    {
+        "observation_id": "3005709",
+        "phenomenon_time": "2026-07-01T09:30:03Z",
+        "result_time": "2026-07-01T09:30:03Z",
+        "result": 2486.9226
+    },
+    {
+        "observation_id": "3004307",
+        "phenomenon_time": "2026-07-01T09:00:03Z",
+        "result_time": "2026-07-01T09:00:03Z",
+        "result": 2490.1624
+    },
+    {
+        "observation_id": "3002605",
+        "phenomenon_time": "2026-07-01T08:30:03Z",
+        "result_time": "2026-07-01T08:30:03Z",
+        "result": 2492.9077
+    },
+    {
+        "observation_id": "3001089",
+        "phenomenon_time": "2026-07-01T08:00:03Z",
+        "result_time": "2026-07-01T08:00:03Z",
+        "result": 2495.6418
+    },
+    {
+        "observation_id": "2997289",
+        "phenomenon_time": "2026-07-01T06:30:03Z",
+        "result_time": "2026-07-01T06:30:03Z",
+        "result": 2497.4158
+    },
+    {
+        "observation_id": "2995715",
+        "phenomenon_time": "2026-07-01T06:00:03Z",
+        "result_time": "2026-07-01T06:00:03Z",
+        "result": 2499.1785
+    },
+    {
+        "observation_id": "2993701",
+        "phenomenon_time": "2026-07-01T05:30:03Z",
+        "result_time": "2026-07-01T05:30:03Z",
+        "result": 2499.5232
+    },
+    {
+        "observation_id": "2991699",
+        "phenomenon_time": "2026-07-01T05:00:03Z",
+        "result_time": "2026-07-01T05:00:03Z",
+        "result": 2499.9336
+    },
+    {
+        "observation_id": "2989974",
+        "phenomenon_time": "2026-07-01T04:30:03Z",
+        "result_time": "2026-07-01T04:30:03Z",
+        "result": 2499.3691
+    },
+    {
+        "observation_id": "2988335",
+        "phenomenon_time": "2026-07-01T04:00:03Z",
+        "result_time": "2026-07-01T04:00:03Z",
+        "result": 2498.8237
+    },
+    {
+        "observation_id": "2986400",
+        "phenomenon_time": "2026-07-01T03:30:03Z",
+        "result_time": "2026-07-01T03:30:03Z",
+        "result": 2497.0178
+    },
+    {
+        "observation_id": "2984509",
+        "phenomenon_time": "2026-07-01T03:00:03Z",
+        "result_time": "2026-07-01T03:00:03Z",
+        "result": 2492.2563
+    },
+    {
+        "observation_id": "2979600",
+        "phenomenon_time": "2026-07-01T01:00:03Z",
+        "result_time": "2026-07-01T01:00:03Z",
+        "result": 2477.4849
+    },
+    {
+        "observation_id": "2978063",
+        "phenomenon_time": "2026-07-01T00:30:03Z",
+        "result_time": "2026-07-01T00:30:03Z",
+        "result": 2477.507
+    },
+    {
+        "observation_id": "2976828",
+        "phenomenon_time": "2026-07-01T00:00:03Z",
+        "result_time": "2026-07-01T00:00:03Z",
+        "result": 2477.2195
+    },
+    {
+        "observation_id": "2975226",
+        "phenomenon_time": "2026-06-30T23:30:03Z",
+        "result_time": "2026-06-30T23:30:03Z",
+        "result": 2477.8755
+    },
+    {
+        "observation_id": "2973301",
+        "phenomenon_time": "2026-06-30T23:00:03Z",
+        "result_time": "2026-06-30T23:00:03Z",
+        "result": 2477.91
+    },
+    {
+        "observation_id": "2972102",
+        "phenomenon_time": "2026-06-30T22:30:03Z",
+        "result_time": "2026-06-30T22:30:03Z",
+        "result": 2478.745
+    },
+    {
+        "observation_id": "2970292",
+        "phenomenon_time": "2026-06-30T22:00:03Z",
+        "result_time": "2026-06-30T22:00:03Z",
+        "result": 2479.4487
+    }
+]
