@@ -101,7 +101,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("Amálie data processor")
+st.title("Sensor data processor")
 st.caption("Turns raw multi-sensor time series into a clean, gap-filled production dataset. "
            "Sample data is already loaded below - just open tabs **1 to 7** in order to see each cleaning "
            "step, then **Analysis** at the bottom for a before/after summary. Upload your own files anytime "
