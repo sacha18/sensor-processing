@@ -34,7 +34,14 @@ def render_nav() -> int:
             border: none !important;
             border-radius: 0 !important;
             border-bottom: 3px solid transparent !important;
-            padding: 0.5rem 0.75rem !important;
+            padding: 0.5rem 0.4rem !important;
+            white-space: normal !important;
+            line-height: 1.2 !important;
+            font-size: clamp(0.65rem, 1.3vw, 1rem) !important;
+        }
+        [class*="st-key-tab_step_"] button p {
+            font-size: inherit !important;
+            line-height: inherit !important;
         }
     ''']
     for i in range(n_steps):
@@ -50,7 +57,7 @@ def render_nav() -> int:
 
     cols = st.columns(n_steps, gap="small")
     for i, col in enumerate(cols):
-        if col.button(f"{i + 1}. {STEP_NAMES[i]}", key=f"tab_step_{i}", icon=STEP_ICONS[i],
+        if col.button(STEP_NAMES[i], key=f"tab_step_{i}", icon=STEP_ICONS[i],
                       type="tertiary", width="stretch"):
             st.session_state.step_idx = i
             st.rerun()
