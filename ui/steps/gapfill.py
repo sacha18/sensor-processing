@@ -1,0 +1,56 @@
+"""Step 6: Gap filling - fill-method breakdown and cleaned series charts."""
+from __future__ import annotations
+
+import plotly.graph_objects as go
+import streamlit as st
+
+from ui.charts import facet_grid, plot
+from ui.data_source import SensorMeta
+from ui.theme import COLORS, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR
+
+
+def _add_sensor_traces(fig, sub, row=None, col=None, legend=False):
+    fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub["value_clean"], mode="lines", line_shape="spline",
+                              line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=row, col=col)
+    for status, color in COLORS.items():
+        if status == "outlier":
+            continue
+        m = sub["fill_method"] == status
+        if m.any():
+            fig.add_trace(go.Scatter(x=sub.loc[m, "timestamp"], y=sub.loc[m, "value_clean"],
+                                      mode="markers", marker=dict(color=color, size=6, line=dict(width=0.5, color="white")),
+                                      name=status, legendgroup=status, showlegend=legend), row=row, col=col)
+    m = sub["is_outlier"]
+    if m.any():
+        fig.add_trace(go.Scatter(x=sub.loc[m, "timestamp"], y=sub.loc[m, "value_raw"],
+                                  mode="markers", marker=dict(color=COLORS["outlier"], size=8, symbol="x"),
+                                  name="outlier (raw)", legendgroup="outlier (raw)", showlegend=legend), row=row, col=col)
+
+
+def render(r: dict, sensors: SensorMeta) -> None:
+    st.subheader("Gap filling", divider="gray")
+    st.caption("Parameters in the sidebar.")
+
+    st.markdown(
+        "Charts reuse the same color coding for how each point was handled:\n\n"
+        "- **observed** (green) - a real, untouched reading\n"
+        "- **interpolated** (yellow) - a short gap, filled by straight-line interpolation\n"
+        "- **outlier_donor_regression** (purple) - an outlier, imputed straight from the most correlated sensor\n"
+        "- **donor-filled** (orange) - a longer gap, filled by regression against the most similar sensor\n"
+        "- **manual_validated** (teal) - reviewed and committed on the **Outliers & validation** step\n"
+        "- **outlier** (blue) - flagged as a fault and excluded from the cleaned series\n"
+        "- **unfilled** (red) - gap too long and no correlated-enough sensor available, left empty"
+    )
+
+    prod = r["production"]
+    counts = prod.groupby(["sensor_id", "fill_method"]).size().unstack(fill_value=0)
+    st.dataframe(counts, width='stretch')
+
+    st.write("**All sensors - cleaned and gap-filled series**")
+    fig = facet_grid([sensors.label[s] for s in sensors.ids])
+    for i, s in enumerate(sensors.ids, start=1):
+        sub = prod[prod["sensor_id"] == s].sort_values("timestamp")
+        _add_sensor_traces(fig, sub, row=i, col=1, legend=(i == 1))
+    fig.update_layout(height=230 * len(sensors.ids), margin=dict(t=70),
+                       legend=HORIZONTAL_LEGEND)
+    plot(fig)

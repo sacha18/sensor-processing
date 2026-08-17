@@ -5,7 +5,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY pipeline.py app.py ./
+COPY pipeline ./pipeline
+COPY ui ./ui
+COPY app.py ./
 COPY .streamlit ./.streamlit
 COPY sample_data ./sample_data
 
