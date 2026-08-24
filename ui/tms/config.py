@@ -107,6 +107,19 @@ def get_table(name: str) -> pd.DataFrame:
     return st.session_state[_SCHEMAS[name]["session_key"]]
 
 
+def is_dirty() -> bool:
+    """Whether any config table (metadata/correction/calibration/field events)
+    holds rows - see ui.mode's confirmation prompt before tearing TMS state down."""
+    return any(not get_table(name).empty for name in _SCHEMAS)
+
+
+def reset() -> None:
+    """Drops every config table back to empty - used by ui.mode when
+    switching away from the TMS pipeline."""
+    for name in _SCHEMAS:
+        set_table(name, _empty_table(name))
+
+
 def editor_key(name: str) -> str:
     """A st.data_editor `key` that changes every time the table is replaced
     (upload or Apply) - without this, a keyed data_editor keeps showing its
