@@ -35,7 +35,8 @@ from ui.fullscreen import enter_fullscreen, exit_fullscreen, is_fullscreen
 from ui.step_validate import is_step_validated, mark_validated
 
 
-def render_stepper_controls(step: int, n_steps: int, session_key: str, gate_section: str | None) -> None:
+def render_stepper_controls(step: int, n_steps: int, session_key: str, gate_section: str | None,
+                             loading: bool = False) -> None:
     unlocked_key = f"{session_key}_unlocked"
     st.session_state.setdefault(unlocked_key, 0)
     gated = gate_section is not None and not is_step_validated(gate_section)
@@ -72,12 +73,14 @@ def render_stepper_controls(step: int, n_steps: int, session_key: str, gate_sect
         with st.container(key=next_key):
             if gated and reviewing:
                 if st.button("Validate this step", key=f"stepper_next_{session_key}_{step}",
-                              icon=":material/check_circle:", type="primary",
+                              icon=":material/check_circle:", type="primary", disabled=loading,
                               help="Marks the before/after above as reviewed and continues."):
                     next_action = "validate_and_advance"
             else:
+                next_help = "Data is still loading..." if loading else (
+                    "Opens the before/after so you can validate it." if gated else None)
                 if st.button("Next", key=f"stepper_next_{session_key}_{step}", icon=":material/arrow_forward:",
-                              type="primary", help="Opens the before/after so you can validate it." if gated else None):
+                              type="primary", disabled=loading, help=next_help):
                     next_action = "review" if gated else "advance"
 
     if back_clicked:
