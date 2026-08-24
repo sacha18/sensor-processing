@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ui.charts import facet_grid, plot
-from ui.data_source import SensorMeta
+from ui.generic.data_source import SensorMeta
 from ui.theme import HORIZONTAL_LEGEND, METHOD_COLORS, METHOD_LABELS, METHOD_PRIORITY, REFERENCE_LINE_COLOR
 
 

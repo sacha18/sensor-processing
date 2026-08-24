@@ -1,5 +1,5 @@
 """Sidebar: the active step's own parameters, scoped to whichever step is
-selected in the top nav (ui/nav.py) - so tweaking a value and watching the
+selected in the top nav (ui/generic/nav.py) - so tweaking a value and watching the
 chart react doesn't require leaving the sidebar. This runs before the
 pipeline (see app.py), so a change here reaches the pipeline on the very
 same rerun - no extra round trip needed.
@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui.nav import STEP_NAMES
-from ui.settings import store
+from ui.generic.nav import STEP_NAMES
+from ui.generic.settings import store
 
 
 def render_sidebar(step: int) -> None:

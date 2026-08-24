@@ -22,13 +22,15 @@ def _has_sensor_files(d: Path) -> bool:
 
 def resolve_data_dir(preferred: str | Path | None = None) -> Path:
     candidates = [Path(preferred)] if preferred else []
-    candidates += [Path(ENV_DATA_DIR), SAMPLE_DATA_DIR]
+    if ENV_DATA_DIR:
+        candidates.append(Path(ENV_DATA_DIR))
+    candidates.append(SAMPLE_DATA_DIR)
     for c in candidates:
         if c.exists() and _has_sensor_files(c):
             return c
     raise FileNotFoundError(
         f"No sensor {'/'.join(SUPPORTED_EXTENSIONS)} files found in any of: {[str(c) for c in candidates]}. "
-        "Mount a dataset directory (SENSOR_DATA_DIR / docker volume at /data)."
+        "Set SENSOR_DATA_DIR to a dataset directory."
     )
 
 

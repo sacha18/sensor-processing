@@ -7,9 +7,9 @@ from dataclasses import dataclass
 
 import streamlit as st
 
-import pipeline as P
-from ui.format import is_telemetry_channel
-from ui.settings import Settings
+import pipeline.generic as P
+from ui.format import is_telemetry_channel, looks_like_tms_export
+from ui.generic.settings import Settings
 from ui.theme import CATEGORICAL_COLORS
 
 
@@ -28,77 +28,98 @@ def get_pipeline(raw_long, step_min, outlier_cfg, max_gap, smooth_window, smooth
                                use_donor_regression=use_donor_regression, donor_min_corr=donor_min_corr)
 
 
-def render_data_source(settings: Settings):
-    """Renders the "Data source" expander and runs the pipeline on the selected
-    channels. Returns (r, sensors, units) or calls st.stop() on error/empty selection."""
-    # Collapsed by default so the stepper is the first thing on screen - the bundled
-    # sample data loads with no input needed, so most visits never need to open this.
-    with st.expander("Data source", icon=":material/upload_file:"):
+_UPLOAD_KEY = "data_source_uploaded_files"
+_CHANNELS_KEY = "data_source_channels"
+_UNITS_KEY = "data_source_units_file"
+
+
+def render_data_source(settings: Settings, show_ui: bool):
+    """Runs the pipeline on the selected channels, returning (r, sensors, units)
+    or calling st.stop() on error/empty selection. The "Data source" controls
+    (file upload, channel/unit pickers) are only rendered when `show_ui` is set,
+    i.e. on the Loading step - other steps just reuse the last selection via
+    session_state."""
+    if show_ui:
+        st.subheader("Data source", divider="gray")
         st.caption("No file? No problem - the bundled sample data loads automatically below.")
         uploaded_files = st.file_uploader(
             "Drop your sensor files here (one file per sensor)",
-            type=["json", "csv"], accept_multiple_files=True,
+            type=["json", "csv"], accept_multiple_files=True, key=_UPLOAD_KEY,
             help="JSON or CSV, same columns either way: phenomenon_time, result (observation_id optional). "
                  "The filename (without extension) becomes that sensor's id.",
         )
+    else:
+        uploaded_files = st.session_state.get(_UPLOAD_KEY)
 
-        if uploaded_files:
-            source_label = f"{len(uploaded_files)} uploaded file(s)"
-            try:
-                raw_long = P.load_raw_from_uploads(uploaded_files)
-            except Exception as e:
-                st.error(f"Could not parse the uploaded files: {e}")
-                st.stop()
-        else:
-            try:
-                data_dir = P.resolve_data_dir()
-            except FileNotFoundError as e:
-                st.error(str(e))
-                st.stop()
-            source_label = str(data_dir)
-            raw_long = P.load_raw(data_dir)
+    if uploaded_files:
+        source_label = f"{len(uploaded_files)} uploaded file(s)"
+        tms_looking = [f.name for f in uploaded_files if looks_like_tms_export(f.name, f.getvalue())]
+        if tms_looking:
+            st.error(f"{', '.join(tms_looking)} looks like a TOMST TMS-4 raw export, not the generic pipeline's "
+                     "format (phenomenon_time/result) - switch to the **TOMST TMS-4 (soil)** pipeline above to "
+                     "process it.")
+            st.stop()
+        try:
+            raw_long = P.load_raw_from_uploads(uploaded_files)
+        except Exception as e:
+            st.error(f"Could not parse the uploaded files: {e}")
+            st.stop()
+    else:
+        try:
+            data_dir = P.resolve_data_dir()
+        except FileNotFoundError as e:
+            st.error(str(e))
+            st.stop()
+        source_label = str(data_dir)
+        raw_long = P.load_raw(data_dir)
 
-        all_channel_ids = sorted(raw_long["sensor_id"].unique())
-        default_channels = [s for s in all_channel_ids if not is_telemetry_channel(s)]
+    all_channel_ids = sorted(raw_long["sensor_id"].unique())
+    default_channels = [s for s in all_channel_ids if not is_telemetry_channel(s)]
 
+    if show_ui:
         col_ch, col_units = st.columns([3, 2])
         with col_ch:
             included_channels = st.multiselect(
-                "Channels to include", all_channel_ids, default=default_channels,
+                "Channels to include", all_channel_ids, default=default_channels, key=_CHANNELS_KEY,
                 help="Device telemetry (battery, radio signal, enclosure temp/humidity, firmware version, ...) is "
                      "excluded by default - only real measurement channels feed the pipeline. Adjust if needed.",
             )
         with col_units:
             units_file = st.file_uploader(
-                "Optional: unit labels per sensor", type=["json", "csv"], key="units_uploader",
+                "Optional: unit labels per sensor", type=["json", "csv"], key=_UNITS_KEY,
                 help="Different sensors rarely measure the same thing (a piezometer in cm, a flow gauge in L/s, "
                      "a scintillometer in W/m2, ...) - drop a small mapping file to label charts accordingly. "
                      "Display only, doesn't affect any computation. CSV with sensor_id,unit columns, or JSON "
                      "{\"sensor_id\": \"unit\"}.",
             )
+    else:
+        included_channels = st.session_state.get(_CHANNELS_KEY, default_channels)
+        units_file = st.session_state.get(_UNITS_KEY)
 
-        if not included_channels:
-            st.error("No channels selected - pick at least one to run the pipeline.")
-            st.stop()
-        raw_long = raw_long[raw_long["sensor_id"].isin(included_channels)].reset_index(drop=True)
+    if not included_channels:
+        st.error("No channels selected - pick at least one to run the pipeline.")
+        st.stop()
+    raw_long = raw_long[raw_long["sensor_id"].isin(included_channels)].reset_index(drop=True)
 
-        units = {}
-        if units_file is not None:
-            try:
-                units = P.parse_units_mapping(units_file.name, units_file.getvalue())
-            except Exception as e:
+    units = {}
+    if units_file is not None:
+        try:
+            units = P.parse_units_mapping(units_file.name, units_file.getvalue())
+        except Exception as e:
+            if show_ui:
                 st.warning(f"Could not parse the unit mapping file: {e}")
 
+    if show_ui:
         st.caption(f"Data source: **{source_label}** - each step (see sidebar) shows the data before/after that stage.")
 
-        r = get_pipeline(raw_long, step_min=settings.step_min, outlier_cfg=settings.outlier_cfg, max_gap=settings.max_gap,
-                          smooth_window=settings.smooth_window, smooth_method=settings.smooth_method,
-                          use_donor_regression=settings.use_donor_regression, donor_min_corr=settings.donor_min_corr)
-        sensor_ids = sorted(r["reg_long"]["sensor_id"].unique())
-        sensors = SensorMeta(
-            ids=sensor_ids,
-            label={s: (f"{s} ({units[s]})" if units.get(s) else s) for s in sensor_ids},
-            color={s: CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)] for i, s in enumerate(sensor_ids)},
-        )
+    r = get_pipeline(raw_long, step_min=settings.step_min, outlier_cfg=settings.outlier_cfg, max_gap=settings.max_gap,
+                      smooth_window=settings.smooth_window, smooth_method=settings.smooth_method,
+                      use_donor_regression=settings.use_donor_regression, donor_min_corr=settings.donor_min_corr)
+    sensor_ids = sorted(r["reg_long"]["sensor_id"].unique())
+    sensors = SensorMeta(
+        ids=sensor_ids,
+        label={s: (f"{s} ({units[s]})" if units.get(s) else s) for s in sensor_ids},
+        color={s: CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)] for i, s in enumerate(sensor_ids)},
+    )
 
     return r, sensors, units

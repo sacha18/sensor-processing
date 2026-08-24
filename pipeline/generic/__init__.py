@@ -10,8 +10,8 @@ data - none of it is hardcoded to a particular deployment.
 
 Pure pandas/numpy/scipy logic, no UI here - app.py (Streamlit) drives it and
 displays each phase. Split into submodules by pipeline stage; this file
-re-exports the public API so `import pipeline as P` behaves exactly as
-before the split.
+re-exports the public API so `import pipeline.generic as P` behaves like
+`import pipeline.tms as TMS` does for the TMS pipeline.
 """
 from __future__ import annotations
 

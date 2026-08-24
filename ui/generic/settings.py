@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import streamlit as st
 
-import pipeline as P
+import pipeline.generic as P
 
 DEFAULTS = {
     "step_min": 30,

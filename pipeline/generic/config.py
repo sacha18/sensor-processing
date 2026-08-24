@@ -12,10 +12,10 @@ USE_DONOR_REGRESSION = True  # impute via the most correlated sensor (outliers +
 DONOR_MIN_CORR = 0.3     # |correlation| a donor must clear before it's trusted to impute
 SUPPORTED_EXTENSIONS = [".json", ".csv"]
 
-# resolution order: SENSOR_DATA_DIR env var (e.g. a mounted docker volume) ->
+# resolution order: SENSOR_DATA_DIR env var ->
 # bundled sample dataset, so the app always has something to show
-ENV_DATA_DIR = os.environ.get("SENSOR_DATA_DIR", "data/bp")
-SAMPLE_DATA_DIR = Path(__file__).resolve().parent.parent / "sample_data"
+ENV_DATA_DIR = os.environ.get("SENSOR_DATA_DIR")
+SAMPLE_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "sample_data" / "generic"
 
 DEFAULT_OUTLIER_CFG = {
     "use_hampel": True, "hampel_half_window": HAMPEL_HALF_WINDOW, "hampel_k": HAMPEL_K,

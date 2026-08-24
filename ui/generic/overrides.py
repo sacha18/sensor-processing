@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-import pipeline as P
+import pipeline.generic as P
 
 
 def apply_manual_overrides(r: dict, smooth_window: int, smooth_method: str) -> int:

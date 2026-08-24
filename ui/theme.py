@@ -16,10 +16,37 @@ COLORS = {"observed": "#91cc75", "linear_interp": "#fac858", "outlier_donor_regr
 # background/reference line (raw series, pre-smoothing series, ...) - readable against
 # white without competing with the colored series drawn on top of it
 REFERENCE_LINE_COLOR = "#8d94a3"
+# marks the points a before/after comparison actually changed - shared across every
+# step's before/after chart so "look here" reads the same regardless of which step
+CHANGED_HIGHLIGHT_COLOR = "#ee6666"
 METHOD_PRIORITY = ["hampel", "flatline", "range", "rate"]
 METHOD_COLORS = {"hampel": "#5470c6", "flatline": "#9a60b4", "range": "#ee6666", "rate": "#fc8452"}
 METHOD_LABELS = {"hampel": "spike (Hampel)", "flatline": "flatline/stuck", "range": "extreme value", "rate": "rate-of-change"}
 CATEGORICAL_COLORS = ECHARTS_COLORWAY
+
+# TMS-specific flag palettes - separate from METHOD_COLORS/METHOD_PRIORITY above
+# (generic pipeline's per-sensor outlier methods) since TMS flags are per-channel
+# and include TMS-only methods (device error, field event, freeze, ...)
+TMS_QC_PRIORITY = ["device_error", "hampel", "flatline", "range", "rate", "field_event", "poor_contact"]
+TMS_QC_COLORS = {
+    "device_error": "#ee6666", "hampel": "#5470c6", "flatline": "#9a60b4",
+    "range": "#fc8452", "rate": "#fac858", "field_event": "#3ba272", "poor_contact": "#ea7ccc",
+}
+TMS_QC_LABELS = {
+    "device_error": "device error", "hampel": "spike (Hampel)", "flatline": "flatline/stuck",
+    "range": "extreme value", "rate": "rate-of-change", "field_event": "known field event",
+    "poor_contact": "poor soil contact",
+}
+TMS_FINAL_QC_PRIORITY = ["vwc_range", "freezing", "vwc_flatline", "field_event", "cross_channel"]
+TMS_FINAL_QC_COLORS = {
+    "vwc_range": "#ee6666", "freezing": "#5470c6", "vwc_flatline": "#9a60b4",
+    "field_event": "#3ba272", "cross_channel": "#fc8452",
+}
+TMS_FINAL_QC_LABELS = {
+    "vwc_range": "VWC out of range", "freezing": "soil freezing (T1)",
+    "vwc_flatline": "VWC flatline/stuck", "field_event": "known field event",
+    "cross_channel": "cross-channel plausibility",
+}
 
 # diverging blue<->red pair, gray neutral midpoint (palette.md); domain is scaled to
 # each matrix's actual min/max rather than the theoretical [-1, 1] so cell-to-cell

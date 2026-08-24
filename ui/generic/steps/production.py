@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ui.charts import add_area_trace, facet_grid, plot
-from ui.data_source import SensorMeta
+from ui.generic.data_source import SensorMeta
 from ui.format import to_csv_bytes
 from ui.theme import HORIZONTAL_LEGEND
 

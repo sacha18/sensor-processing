@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ui.charts import plot
-from ui.data_source import SensorMeta
+from ui.generic.data_source import SensorMeta
 from ui.theme import COLORS, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR
 
 # readable labels for a raw fill_method value, so the filter reads e.g.

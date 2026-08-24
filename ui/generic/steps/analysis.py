@@ -7,9 +7,9 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from scipy.cluster.hierarchy import dendrogram
 
-import pipeline as P
+import pipeline.generic as P
 from ui.charts import add_area_trace, corr_heatmap, facet_grid, plot
-from ui.data_source import SensorMeta
+from ui.generic.data_source import SensorMeta
 from ui.format import to_csv_bytes
 from ui.theme import ECHARTS_COLORWAY, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, _rgba
 

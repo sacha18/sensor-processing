@@ -5,6 +5,8 @@ collapsing to one bit.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -14,25 +16,32 @@ from .config import DEFAULT_OUTLIER_CFG, HAMPEL_HALF_WINDOW, HAMPEL_K
 # a) Hampel filter: flags points far (k MADs) from the median of a symmetric
 # local window. A slow multi-step ramp (real event) stays inside the window's
 # spread and is not flagged; an isolated spike is.
+#
+# Vectorized via a sliding window over the whole series at once (numpy
+# stride_tricks) rather than a per-point Python loop - the loop was the
+# pipeline's dominant cost by a wide margin (~40x the rest combined on a
+# multi-sensor TMS run), since it reran on every parameter tweak for every
+# sensor/channel. NaN-padding both ends before windowing reproduces the
+# original's truncated (not centered-with-fabricated-data) edge windows:
+# nanmedian over the padding NaNs plus the real edge values is exactly the
+# median of just those real values, same as the old lo/hi-clamped slice.
 
 def hampel_flags(x: pd.Series, half_window: int = HAMPEL_HALF_WINDOW, k: float = HAMPEL_K) -> pd.Series:
     vals = x.to_numpy(dtype=float)
     n = len(vals)
-    flags = np.zeros(n, dtype=bool)
-    for i in range(n):
-        if np.isnan(vals[i]):
-            continue
-        lo, hi = max(0, i - half_window), min(n, i + half_window + 1)
-        w = vals[lo:hi]
-        w = w[~np.isnan(w)]
-        if len(w) < 3:
-            continue
-        med = np.median(w)
-        mad = np.median(np.abs(w - med)) * 1.4826
-        if mad == 0:
-            continue
-        if abs(vals[i] - med) > k * mad:
-            flags[i] = True
+    if n == 0:
+        return pd.Series(vals, index=x.index, dtype=bool)
+
+    padded = np.concatenate([np.full(half_window, np.nan), vals, np.full(half_window, np.nan)])
+    windows = np.lib.stride_tricks.sliding_window_view(padded, 2 * half_window + 1)  # (n, window)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # all-NaN window -> nan, filtered out below
+        med = np.nanmedian(windows, axis=1)
+        counts = np.sum(~np.isnan(windows), axis=1)
+        mad = np.nanmedian(np.abs(windows - med[:, None]), axis=1) * 1.4826
+
+    flags = ~np.isnan(vals) & (counts >= 3) & (mad > 0) & (np.abs(vals - med) > k * mad)
     return pd.Series(flags, index=x.index)
 
 
