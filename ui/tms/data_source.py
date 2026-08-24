@@ -11,12 +11,14 @@ import streamlit as st
 import pipeline.tms as TMS
 from ui.format import looks_like_generic_export
 from ui.generic.data_source import SensorMeta
+from ui.loading import finish_loading_gate, uploads_fingerprint
 from ui.theme import CATEGORICAL_COLORS
 from ui.tms.config import get_table
 from ui.tms.settings import TmsSettings
 
 _UPLOAD_KEY_BASE = "tms_uploaded_files"
 _RELOAD_VERSION_KEY = "tms_reload_version"
+LOADING_NAMESPACE = "tms_data_source"
 
 
 def _versioned(key_base: str) -> str:
@@ -26,6 +28,19 @@ def _versioned(key_base: str) -> str:
     component keeps showing the previously attached file client-side unless
     the widget itself gets a new key (same trick as ui.tms.config.editor_key)."""
     return f"{key_base}_{st.session_state.get(_RELOAD_VERSION_KEY, 0)}"
+
+
+def peek_tms_fingerprint() -> tuple:
+    """The fingerprint render_data_source_tms will use this run, without
+    rendering anything - Streamlit resolves a widget's current value into
+    session_state before the script body runs, so this is accurate even
+    before st.file_uploader(key=upload_key) is (re-)called this pass. Lets
+    ui.tms.page decide, before doing any rendering, whether this run needs
+    the loading-gate priming pass (see ui.loading)."""
+    uploaded_files = st.session_state.get(_versioned(_UPLOAD_KEY_BASE))
+    if uploaded_files:
+        return uploads_fingerprint(uploaded_files)
+    return ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
 
 
 @st.cache_data(show_spinner="Running TMS pipeline...")
@@ -81,6 +96,11 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
         uploaded_files = st.session_state.get(upload_key)
 
     if uploaded_files:
+        fingerprint = uploads_fingerprint(uploaded_files)
+    else:
+        fingerprint = ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
+
+    if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"
         generic_looking = [f.name for f in uploaded_files if looks_like_generic_export(f.name, f.getvalue())]
         if generic_looking:
@@ -108,6 +128,7 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
         raw_wide, get_table("metadata"), get_table("correction"), get_table("calibration"),
         get_table("field_events"), settings.qc_cfg, settings.final_qc_cfg, settings.step_min,
     )
+    finish_loading_gate(LOADING_NAMESPACE, fingerprint)
     sensor_ids = sorted(raw_wide["sensor_id"].unique())
     sensors = SensorMeta(
         ids=sensor_ids, label={s: s for s in sensor_ids},
