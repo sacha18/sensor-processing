@@ -6,6 +6,8 @@ units-label file.
 """
 from __future__ import annotations
 
+import logging
+
 import streamlit as st
 
 import pipeline.tms as TMS
@@ -15,6 +17,8 @@ from ui.loading import finish_loading_gate, uploads_fingerprint
 from ui.theme import CATEGORICAL_COLORS
 from ui.tms.config import get_table
 from ui.tms.settings import TmsSettings
+
+logger = logging.getLogger(__name__)
 
 _UPLOAD_KEY_BASE = "tms_uploaded_files"
 _RELOAD_VERSION_KEY = "tms_reload_version"
@@ -102,16 +106,23 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
 
     if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"
+        logger.info("TMS data source: %d file(s) received from the browser", len(uploaded_files))
         generic_looking = [f.name for f in uploaded_files if looks_like_generic_export(f.name, f.getvalue())]
         if generic_looking:
             st.error(f"{', '.join(generic_looking)} looks like the generic pipeline's format (phenomenon_time/"
                      "result), not a TOMST TMS-4 raw export - switch to the **Generic pipeline** above to process it.")
             st.stop()
         try:
-            raw_wide = _load_tms_raw_uploads(uploaded_files)
+            raw_wide, failed = _load_tms_raw_uploads(uploaded_files)
         except Exception as e:
             st.error(f"Could not parse the uploaded files: {e}")
             st.stop()
+        if failed:
+            st.warning(
+                f"{len(failed)} of {len(uploaded_files)} uploaded file(s) could not be parsed and were skipped "
+                "(possibly lost/corrupted in transit - try re-uploading just these):\n\n"
+                + "\n".join(f"- **{name}**: {err}" for name, err in failed)
+            )
     else:
         try:
             data_dir = TMS.resolve_tms_data_dir()

@@ -12,11 +12,20 @@ config.py::RAW_FIELDS), for archive fidelity.
 from __future__ import annotations
 
 import io
+import logging
 from pathlib import Path
 
 import pandas as pd
 
 from .config import FILENAME_RE, MERGED_EXPORT_COLUMNS, RAW_FIELDS, SAMPLE_DATA_DIR, TIMESTAMP_FORMATS
+
+logger = logging.getLogger(__name__)
+
+# Uploads are parsed in chunks of this size rather than all at once, so a
+# multi-hundred-file session (a) reports progress through the logs and (b) a
+# single bad/truncated file doesn't take down the whole batch - see
+# load_tms_raw_from_uploads.
+UPLOAD_BATCH_SIZE = 50
 
 
 def extract_sensor_id(filename: str) -> str:
@@ -141,18 +150,40 @@ def load_tms_raw(data_dir: Path = None) -> pd.DataFrame:
     return _stack_frames([parse_tms_records(f.name, f.read_bytes()) for f in files])
 
 
-def load_tms_raw_from_uploads(uploaded_files: list) -> pd.DataFrame:
+def load_tms_raw_from_uploads(uploaded_files: list, batch_size: int = UPLOAD_BATCH_SIZE
+                               ) -> tuple[pd.DataFrame, list[tuple[str, str]]]:
     """Load from a list of file-like objects (e.g. Streamlit's UploadedFile) -
     same schema as load_tms_raw. Each file is parsed either as a raw TOMST
     export or, if it's a previously downloaded merged raw archive, read back
     directly - the two can be mixed in one upload (e.g. an old archive plus
-    newly downloaded raw files)."""
+    newly downloaded raw files).
+
+    Parsed in batches of `batch_size` so a large upload (hundreds of files)
+    shows progress in the logs, and one file that failed to arrive intact or
+    doesn't parse is reported and skipped rather than aborting the whole
+    session - returns (raw_wide, failures), with failures as
+    [(filename, error message), ...] for any file that didn't parse."""
+    total = len(uploaded_files)
     frames = []
-    for f in uploaded_files:
-        name = getattr(f, "name", "")
-        content = f.getvalue() if hasattr(f, "getvalue") else f.read()
-        if looks_like_merged_export(content):
-            frames.append(parse_merged_export(content))
-        else:
-            frames.append(parse_tms_records(name, content))
-    return _stack_frames(frames)
+    failures = []
+    logger.info("TMS upload: parsing %d file(s) in batches of %d", total, batch_size)
+    for batch_start in range(0, total, batch_size):
+        batch = uploaded_files[batch_start:batch_start + batch_size]
+        batch_end = batch_start + len(batch)
+        logger.info("TMS upload: batch %d-%d of %d", batch_start + 1, batch_end, total)
+        for f in batch:
+            name = getattr(f, "name", "")
+            try:
+                content = f.getvalue() if hasattr(f, "getvalue") else f.read()
+                if looks_like_merged_export(content):
+                    frames.append(parse_merged_export(content))
+                else:
+                    frames.append(parse_tms_records(name, content))
+            except Exception as e:
+                logger.warning("TMS upload: failed to parse %r: %s", name, e)
+                failures.append((name, str(e)))
+    logger.info("TMS upload: %d/%d file(s) parsed successfully, %d failed",
+                len(frames), total, len(failures))
+    if not frames:
+        raise ValueError(f"No TMS files could be parsed ({len(failures)} failed)")
+    return _stack_frames(frames), failures

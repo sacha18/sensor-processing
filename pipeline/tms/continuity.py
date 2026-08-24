@@ -10,10 +10,14 @@ remaining hole in the timeline is reported - never filled here.
 """
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from .config import DEFAULT_STEP_MIN, GAP_TOLERANCE
 from .io import download_sort_key
+
+logger = logging.getLogger(__name__)
 
 VALUE_COLS = ["t1_raw", "t2_raw", "t3_raw", "signal_raw"]
 
@@ -47,6 +51,8 @@ def merge_and_dedupe(raw_wide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
         .sort_values(["sensor_id", "timestamp"])
         .reset_index(drop=True)
     )
+    logger.info("TMS merge_and_dedupe: %d row(s) in, %d row(s) out, %d duplicate (sensor, timestamp) pair(s) "
+                "across %d sensor(s)", len(raw_wide), len(out), len(dup_report), raw_wide["sensor_id"].nunique())
     return out, dup_report
 
 
