@@ -23,11 +23,8 @@ from ui.picker import render_picker
 from ui.theme import inject_page_css, register_plotly_theme
 from ui.tms.page import render_tms_page
 
-# So pipeline.*/ui.* modules' logging.getLogger(__name__).info(...) calls (e.g.
-# upload/merge diagnostics in pipeline.tms.io and pipeline.tms.continuity)
-# actually reach stderr - which Streamlit Cloud captures into the app's log
-# viewer - instead of being silently dropped by Python's default "no handler"
-# warning-only fallback.
+# Without this, modules' logger.info(...) calls are silently dropped -
+# Python's default has no handler below WARNING.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 st.set_page_config(page_title="Sensor cleaning pipeline", layout="wide")

@@ -22,10 +22,8 @@ from .config import FILENAME_RE, MERGED_EXPORT_COLUMNS, RAW_FIELDS, SAMPLE_DATA_
 
 logger = logging.getLogger(__name__)
 
-# Uploads are parsed in chunks of this size rather than all at once, so a
-# multi-hundred-file session (a) reports progress through the logs and (b) a
-# single bad/truncated file doesn't take down the whole batch - see
-# load_tms_raw_from_uploads.
+# Uploads are parsed in batches of this size - reports progress and keeps
+# one bad file from failing the whole session (see load_tms_raw_from_uploads).
 UPLOAD_BATCH_SIZE = 50
 
 
@@ -152,11 +150,8 @@ def load_tms_raw(data_dir: Path = None) -> pd.DataFrame:
 
 
 def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
-    """Expands a .zip upload into its member (filename, content) pairs -
-    lets a large multi-file session (e.g. hundreds of raw TOMST exports)
-    travel as a single, reliable browser upload instead of one fragile HTTP
-    request per file. Directories, hidden/system entries (.DS_Store,
-    __MACOSX/...) and anything that isn't a .csv are skipped."""
+    """Expands a .zip into (filename, content) pairs, skipping directories,
+    hidden/system entries (.DS_Store, __MACOSX/...), and non-.csv members."""
     out = []
     with zipfile.ZipFile(io.BytesIO(content)) as zf:
         for info in zf.infolist():
@@ -172,18 +167,12 @@ def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
 def load_tms_raw_from_uploads(uploaded_files: list, batch_size: int = UPLOAD_BATCH_SIZE
                                ) -> tuple[pd.DataFrame, list[tuple[str, str]]]:
     """Load from a list of file-like objects (e.g. Streamlit's UploadedFile) -
-    same schema as load_tms_raw. Each file is parsed either as a raw TOMST
-    export, a previously downloaded merged raw archive (read back directly),
-    or a .zip of either - all forms can be mixed in one upload (e.g. an old
-    archive plus a .zip of newly downloaded raw files). Uploading many raw
-    files as one .zip is the recommended path for large sessions (hundreds
-    of files): it's one reliable browser request instead of one per file.
+    same schema as load_tms_raw. Each entry is a raw TOMST export, a merged
+    raw archive, or a .zip of either (mixable in one upload).
 
-    Parsed in batches of `batch_size` so a large upload shows progress in
-    the logs, and one file that failed to arrive intact or doesn't parse is
-    reported and skipped rather than aborting the whole session - returns
-    (raw_wide, failures), with failures as [(filename, error message), ...]
-    for any file that didn't parse."""
+    Returns (raw_wide, failures), with failures as
+    [(filename, error message), ...] for any file that didn't parse - one
+    bad file is skipped rather than aborting the whole upload."""
     entries = []
     for f in uploaded_files:
         name = getattr(f, "name", "")

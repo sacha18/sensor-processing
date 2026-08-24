@@ -67,13 +67,9 @@ def render_tms_page(picker_page) -> None:
 
     # Priming pass: a new/changed upload needs a run that paints Next as
     # disabled *before* the heavy parse/pipeline call blocks the script -
-    # see ui.loading for why this can't just be a `disabled=` on the button
-    # rendered after that call. This pass skips the step content and the
-    # heavy work (skip_heavy=True below), then reruns itself into the pass
-    # that does it - but still renders the data source's upload widget (via
-    # render_data_source_tms itself), since a run that doesn't re-declare
-    # a file_uploader unmounts it client-side and drops whatever was
-    # attached, i.e. the very upload that triggered this pass.
+    # see ui.loading. render_data_source_tms still runs (skip_heavy=True) so
+    # its file_uploader stays mounted - skipping it here would unmount the
+    # widget and drop the very upload that triggered this pass.
     loading = loading_pending(LOADING_NAMESPACE, peek_tms_fingerprint())
     if loading:
         render_stepper_controls(step, n_steps=len(TMS_STEP_NAMES), session_key="tms_step_idx",

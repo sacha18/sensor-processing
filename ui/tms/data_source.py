@@ -75,13 +75,10 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: boo
     upload via session_state, same pattern as ui/data_source.py.
 
     `skip_heavy` still renders the upload controls (if show_ui) but returns
-    (None, None) immediately after, without parsing anything or running the
-    pipeline - used by the loading-gate priming pass (ui.loading) so the
-    file_uploader widget stays mounted across that extra rerun. Streamlit
-    unmounts a widget client-side on any run that doesn't re-declare it, and
-    for file_uploader that means losing track of whatever was already
-    attached - skipping this whole function during the priming pass (as it
-    used to) silently dropped the very upload that triggered it."""
+    (None, None) immediately, skipping the parse/pipeline work - used by the
+    loading-gate priming pass (ui.loading). A widget not re-declared on a
+    run gets unmounted client-side, and file_uploader loses track of
+    already-attached files when that happens."""
     upload_key = _versioned(_UPLOAD_KEY_BASE)
 
     if show_ui:
