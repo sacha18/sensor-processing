@@ -46,7 +46,7 @@ def render(r: dict, sensors: SensorMeta) -> None:
             "- **interpolated** (yellow) - a short gap, filled by straight-line interpolation\n"
             "- **outlier_donor_regression** (purple) - an outlier, imputed straight from the most correlated sensor\n"
             "- **donor-filled** (orange) - a longer gap, filled by regression against the most similar sensor\n"
-            "- **manual_validated** (teal) - reviewed and committed on the **Outliers & validation** step\n"
+            "- **manual_validated** (teal) - reviewed and committed on the **Outliers** step\n"
             "- **outlier** (blue) - flagged as a fault and excluded from the cleaned series\n"
             "- **unfilled** (red) - gap too long and no correlated-enough sensor available, left empty"
         )

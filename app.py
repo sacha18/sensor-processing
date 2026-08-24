@@ -75,7 +75,7 @@ TMS_STEP_GATES = {
     TMS_STEP_CALIBRATION: "tms_calibration",
     TMS_STEP_FINAL_QC: "tms_final_qc",
 }
-GENERIC_STEP_GATES = {GENERIC_STEP_GAPFILL: "gapfill"}
+GENERIC_STEP_GATES = {GENERIC_STEP_OUTLIERS: "outliers", GENERIC_STEP_GAPFILL: "gapfill"}
 
 st.set_page_config(page_title="Sensor cleaning pipeline", layout="wide")
 register_plotly_theme()

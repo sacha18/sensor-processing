@@ -18,7 +18,7 @@ from __future__ import annotations
 import streamlit as st
 
 STEP_NAMES = [
-    "Loading", "Deduplication", "Regularization", "Outliers & validation",
+    "Loading", "Deduplication", "Regularization", "Outliers",
     "Gap filling", "Production dataset", "Analysis",
 ]
 STEP_ICONS = [

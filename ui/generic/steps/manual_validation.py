@@ -1,7 +1,11 @@
 """Step 4 (part 2/2): Manual validation - review/override pipeline suggestions.
 
-Rendered below ui.steps.outliers on the combined "Outliers & validation" step,
-so detection and review live on the same screen.
+Rendered below ui.steps.outliers on the combined "Outliers" step, so detection
+and review live on the same screen. This module's whole per-point editor
+(filter/data_editor/Validate-Clear, sensor detail chart) is the step's normal
+working view, not its before/after gate - ui.stepper's fullscreen review for
+this step is ui.steps.outliers' own before/after chart, so this render() is
+skipped entirely while that's open (see is_fullscreen(_SECTION) below).
 """
 from __future__ import annotations
 
@@ -11,8 +15,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ui.charts import plot
+from ui.fullscreen import is_fullscreen
 from ui.generic.data_source import SensorMeta
 from ui.theme import COLORS, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR
+
+_SECTION = "outliers"
 
 # readable labels for a raw fill_method value, so the filter reads e.g.
 # "Correlated-series imputation (outlier)" instead of "outlier_donor_regression".
@@ -28,6 +35,9 @@ SOURCE_LABELS = {
 
 
 def render(r: dict, sensors: SensorMeta, overrides_applied_count: int) -> None:
+    if is_fullscreen(_SECTION):
+        return
+
     st.subheader("Manual validation", divider="gray")
     st.caption("Review each suggestion the pipeline made for a **suspect value** (flagged outlier) or **missing "
                "data** point, then hit **Validate** to commit your review into the production dataset used by "
