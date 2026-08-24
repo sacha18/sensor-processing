@@ -71,12 +71,22 @@ def peek_generic_fingerprint() -> tuple:
     return ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
 
 
-def render_data_source(settings: Settings, show_ui: bool):
+def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = False):
     """Runs the pipeline on the selected channels, returning (r, sensors, units)
     or calling st.stop() on error/empty selection. The "Data source" controls
     (file upload, channel/unit pickers) are only rendered when `show_ui` is set,
     i.e. on the Loading step - other steps just reuse the last selection via
-    session_state."""
+    session_state.
+
+    `skip_heavy` still renders the main file_uploader (if show_ui) but
+    returns (None, None, None) immediately after, without parsing anything
+    or running the pipeline - used by the loading-gate priming pass
+    (ui.loading) so the widget stays mounted across that extra rerun.
+    Streamlit unmounts a widget client-side on any run that doesn't
+    re-declare it, and for file_uploader that means losing track of
+    whatever was already attached - skipping this whole function during the
+    priming pass (as it used to) silently dropped the very upload that
+    triggered it."""
     upload_key = _versioned(_UPLOAD_KEY_BASE)
     channels_key = _versioned(_CHANNELS_KEY_BASE)
     units_key = _versioned(_UNITS_KEY_BASE)
@@ -108,6 +118,9 @@ def render_data_source(settings: Settings, show_ui: bool):
         fingerprint = uploads_fingerprint(uploaded_files)
     else:
         fingerprint = ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
+
+    if skip_heavy:
+        return None, None, None
 
     if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"

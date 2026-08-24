@@ -68,11 +68,20 @@ def _load_tms_raw_uploads(uploaded_files):
     return TMS.load_tms_raw_from_uploads(uploaded_files)
 
 
-def render_data_source_tms(settings: TmsSettings, show_ui: bool):
+def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: bool = False):
     """Runs the TMS pipeline, returning (r, sensors) or calling st.stop() on
     error/empty selection. Upload controls only render when `show_ui` is set,
     i.e. on the "Loading & continuity" step - other steps reuse the last
-    upload via session_state, same pattern as ui/data_source.py."""
+    upload via session_state, same pattern as ui/data_source.py.
+
+    `skip_heavy` still renders the upload controls (if show_ui) but returns
+    (None, None) immediately after, without parsing anything or running the
+    pipeline - used by the loading-gate priming pass (ui.loading) so the
+    file_uploader widget stays mounted across that extra rerun. Streamlit
+    unmounts a widget client-side on any run that doesn't re-declare it, and
+    for file_uploader that means losing track of whatever was already
+    attached - skipping this whole function during the priming pass (as it
+    used to) silently dropped the very upload that triggered it."""
     upload_key = _versioned(_UPLOAD_KEY_BASE)
 
     if show_ui:
@@ -105,6 +114,9 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
         fingerprint = uploads_fingerprint(uploaded_files)
     else:
         fingerprint = ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
+
+    if skip_heavy:
+        return None, None
 
     if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"

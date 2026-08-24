@@ -64,14 +64,21 @@ def render_generic_page(picker_page) -> None:
     # Priming pass: a new/changed upload needs a run that paints Next as
     # disabled *before* the heavy parse/pipeline call blocks the script -
     # see ui.loading for why this can't just be a `disabled=` on the button
-    # rendered after that call. This pass skips the heavy work and the step
-    # content entirely, then reruns itself into the pass that does it.
-    if loading_pending(LOADING_NAMESPACE, peek_generic_fingerprint()):
+    # rendered after that call. This pass skips the step content and the
+    # heavy work (skip_heavy=True below), then reruns itself into the pass
+    # that does it - but still renders the data source's upload widget (via
+    # render_data_source itself), since a run that doesn't re-declare a
+    # file_uploader unmounts it client-side and drops whatever was
+    # attached, i.e. the very upload that triggered this pass.
+    loading = loading_pending(LOADING_NAMESPACE, peek_generic_fingerprint())
+    if loading:
         render_stepper_controls(step, n_steps=len(STEP_NAMES), session_key="step_idx",
                                  gate_section=STEP_GATES.get(step), loading=True)
-        st.rerun()
 
-    r, sensors, units = render_data_source(settings, step == STEP_LOAD)
+    r, sensors, units = render_data_source(settings, step == STEP_LOAD, skip_heavy=loading)
+
+    if loading:
+        st.rerun()
 
     # Manual-validation overrides are applied here, unconditionally, so every step
     # (not just the Manual validation step itself) sees the committed values
