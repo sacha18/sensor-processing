@@ -83,11 +83,13 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
         with col_upload:
             uploaded_files = st.file_uploader(
                 "Drop your TOMST TMS-4 export files here (one or more per sensor)",
-                type=["csv"], accept_multiple_files=True, key=upload_key,
+                type=["csv", "zip"], accept_multiple_files=True, key=upload_key,
                 help="Standard TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<part>.csv. Multiple "
-                     "downloads of the same physical sensor are grouped and merged automatically. A previously "
-                     "downloaded **tms_merged_raw_archive.csv** is also accepted - drop it in alone to resume a "
-                     "session, or alongside new raw files to add only what's new.",
+                     "downloads of the same physical sensor are grouped and merged automatically. For a large "
+                     "session (hundreds of files), zip them up and drop the single **.zip** instead - one upload "
+                     "is far more reliable than one browser request per file. A previously downloaded "
+                     "**tms_merged_raw_archive.csv** is also accepted - drop it in alone to resume a session, or "
+                     "alongside new raw files to add only what's new.",
             )
         with col_sample:
             st.write("")  # vertical spacer to align the button with the uploader, not its label

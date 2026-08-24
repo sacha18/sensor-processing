@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import logging
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -150,31 +151,60 @@ def load_tms_raw(data_dir: Path = None) -> pd.DataFrame:
     return _stack_frames([parse_tms_records(f.name, f.read_bytes()) for f in files])
 
 
+def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
+    """Expands a .zip upload into its member (filename, content) pairs -
+    lets a large multi-file session (e.g. hundreds of raw TOMST exports)
+    travel as a single, reliable browser upload instead of one fragile HTTP
+    request per file. Directories, hidden/system entries (.DS_Store,
+    __MACOSX/...) and anything that isn't a .csv are skipped."""
+    out = []
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        for info in zf.infolist():
+            member_name = Path(info.filename).name
+            if info.is_dir() or member_name.startswith(".") or "__MACOSX" in info.filename:
+                continue
+            if not member_name.lower().endswith(".csv"):
+                continue
+            out.append((member_name, zf.read(info)))
+    return out
+
+
 def load_tms_raw_from_uploads(uploaded_files: list, batch_size: int = UPLOAD_BATCH_SIZE
                                ) -> tuple[pd.DataFrame, list[tuple[str, str]]]:
     """Load from a list of file-like objects (e.g. Streamlit's UploadedFile) -
     same schema as load_tms_raw. Each file is parsed either as a raw TOMST
-    export or, if it's a previously downloaded merged raw archive, read back
-    directly - the two can be mixed in one upload (e.g. an old archive plus
-    newly downloaded raw files).
+    export, a previously downloaded merged raw archive (read back directly),
+    or a .zip of either - all forms can be mixed in one upload (e.g. an old
+    archive plus a .zip of newly downloaded raw files). Uploading many raw
+    files as one .zip is the recommended path for large sessions (hundreds
+    of files): it's one reliable browser request instead of one per file.
 
-    Parsed in batches of `batch_size` so a large upload (hundreds of files)
-    shows progress in the logs, and one file that failed to arrive intact or
-    doesn't parse is reported and skipped rather than aborting the whole
-    session - returns (raw_wide, failures), with failures as
-    [(filename, error message), ...] for any file that didn't parse."""
-    total = len(uploaded_files)
+    Parsed in batches of `batch_size` so a large upload shows progress in
+    the logs, and one file that failed to arrive intact or doesn't parse is
+    reported and skipped rather than aborting the whole session - returns
+    (raw_wide, failures), with failures as [(filename, error message), ...]
+    for any file that didn't parse."""
+    entries = []
+    for f in uploaded_files:
+        name = getattr(f, "name", "")
+        content = f.getvalue() if hasattr(f, "getvalue") else f.read()
+        if name.lower().endswith(".zip"):
+            members = _expand_zip(content)
+            logger.info("TMS upload: %r expanded to %d file(s)", name, len(members))
+            entries.extend(members)
+        else:
+            entries.append((name, content))
+
+    total = len(entries)
     frames = []
     failures = []
     logger.info("TMS upload: parsing %d file(s) in batches of %d", total, batch_size)
     for batch_start in range(0, total, batch_size):
-        batch = uploaded_files[batch_start:batch_start + batch_size]
+        batch = entries[batch_start:batch_start + batch_size]
         batch_end = batch_start + len(batch)
         logger.info("TMS upload: batch %d-%d of %d", batch_start + 1, batch_end, total)
-        for f in batch:
-            name = getattr(f, "name", "")
+        for name, content in batch:
             try:
-                content = f.getvalue() if hasattr(f, "getvalue") else f.read()
                 if looks_like_merged_export(content):
                     frames.append(parse_merged_export(content))
                 else:
