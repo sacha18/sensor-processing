@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import FILENAME_RE, RAW_FIELDS, SAMPLE_DATA_DIR, TIMESTAMP_FORMAT
+from .config import FILENAME_RE, MERGED_EXPORT_COLUMNS, RAW_FIELDS, SAMPLE_DATA_DIR, TIMESTAMP_FORMATS
 
 
 def extract_sensor_id(filename: str) -> str:
@@ -53,6 +53,27 @@ def resolve_tms_data_dir(preferred: str | Path | None = None) -> Path:
     )
 
 
+def _parse_timestamps(raw: pd.Series, name: str) -> pd.Series:
+    """Tries each known TOMST export timestamp format (they vary by the
+    logger's regional settings) row by row - a single file can mix formats,
+    e.g. when it's been resaved in Excel and midnight rows lose their
+    00:00:00 suffix while the rest keep full date+time."""
+    ts = pd.to_datetime(raw, format=TIMESTAMP_FORMATS[0], errors="coerce")
+    for fmt in TIMESTAMP_FORMATS[1:]:
+        if ts.isna().any():
+            ts = ts.fillna(pd.to_datetime(raw, format=fmt, errors="coerce"))
+    if ts.isna().any():
+        bad = raw[ts.isna()].iloc[0]
+        raise ValueError(f"'{name}': unrecognized timestamp format, e.g. {bad!r}")
+    return ts
+
+
+def _parse_decimal(raw: pd.Series) -> pd.Series:
+    """Some TOMST export variants use a comma decimal separator (e.g.
+    '24,6875') instead of a dot - normalized before the float conversion."""
+    return raw.str.replace(",", ".", regex=False).astype(float)
+
+
 def parse_tms_records(name: str, content: bytes | str) -> pd.DataFrame:
     """Parses one TOMST export file into a per-row DataFrame with sensor_id/
     source_file attached - the raw fields, plus a standardized `timestamp`,
@@ -68,16 +89,41 @@ def parse_tms_records(name: str, content: bytes | str) -> pd.DataFrame:
         "sensor_id": extract_sensor_id(name),
         "source_file": Path(name).name,
         "row_index": raw["row_index"].astype(int),
-        "timestamp": pd.to_datetime(raw["timestamp_raw"], format=TIMESTAMP_FORMAT),
-        "v3_raw": raw["v3_raw"].astype(float),
-        "t1_raw": raw["t1_raw"].astype(float),
-        "t2_raw": raw["t2_raw"].astype(float),
-        "t3_raw": raw["t3_raw"].astype(float),
-        "signal_raw": raw["signal_raw"].astype(float),
-        "shake": raw["shake"].astype(float),
-        "err_flag": raw["err_flag"].astype(float),
+        "timestamp": _parse_timestamps(raw["timestamp_raw"], name),
+        "v3_raw": _parse_decimal(raw["v3_raw"]),
+        "t1_raw": _parse_decimal(raw["t1_raw"]),
+        "t2_raw": _parse_decimal(raw["t2_raw"]),
+        "t3_raw": _parse_decimal(raw["t3_raw"]),
+        "signal_raw": _parse_decimal(raw["signal_raw"]),
+        "shake": _parse_decimal(raw["shake"]),
+        "err_flag": _parse_decimal(raw["err_flag"]),
         "v10_raw": raw["v10_raw"],
     })
+
+
+def looks_like_merged_export(content: bytes | str) -> bool:
+    """Sniffs whether an upload is this app's own "Download merged raw
+    archive CSV" export (comma-separated, header row) rather than a raw
+    TOMST export - lets a large multi-file session be resumed from that
+    archive instead of re-uploading every raw file again."""
+    text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else content
+    first_line = text.splitlines()[0] if text else ""
+    cols = [c.strip() for c in first_line.split(",")]
+    return cols == MERGED_EXPORT_COLUMNS
+
+
+def parse_merged_export(content: bytes | str) -> pd.DataFrame:
+    """Reads back this app's merged raw archive export - same schema as
+    parse_tms_records's output (raw_wide), so it slots into _stack_frames
+    and the rest of the pipeline (including merge_and_dedupe, which is a
+    no-op on an already-deduped archive) unchanged."""
+    buf = io.BytesIO(content) if isinstance(content, bytes) else io.StringIO(content)
+    df = pd.read_csv(buf, dtype={"sensor_id": str, "source_file": str, "v10_raw": str})
+    df["row_index"] = df["row_index"].astype(int)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    for c in ["v3_raw", "t1_raw", "t2_raw", "t3_raw", "signal_raw", "shake", "err_flag"]:
+        df[c] = df[c].astype(float)
+    return df[MERGED_EXPORT_COLUMNS]
 
 
 def _stack_frames(frames: list) -> pd.DataFrame:
@@ -97,10 +143,16 @@ def load_tms_raw(data_dir: Path = None) -> pd.DataFrame:
 
 def load_tms_raw_from_uploads(uploaded_files: list) -> pd.DataFrame:
     """Load from a list of file-like objects (e.g. Streamlit's UploadedFile) -
-    same schema as load_tms_raw."""
+    same schema as load_tms_raw. Each file is parsed either as a raw TOMST
+    export or, if it's a previously downloaded merged raw archive, read back
+    directly - the two can be mixed in one upload (e.g. an old archive plus
+    newly downloaded raw files)."""
     frames = []
     for f in uploaded_files:
         name = getattr(f, "name", "")
         content = f.getvalue() if hasattr(f, "getvalue") else f.read()
-        frames.append(parse_tms_records(name, content))
+        if looks_like_merged_export(content):
+            frames.append(parse_merged_export(content))
+        else:
+            frames.append(parse_tms_records(name, content))
     return _stack_frames(frames)

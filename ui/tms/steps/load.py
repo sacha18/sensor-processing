@@ -8,7 +8,7 @@ import streamlit as st
 
 from ui.charts import plot
 from ui.generic.data_source import SensorMeta
-from ui.format import to_csv_bytes
+from ui.format import render_capped_dataframe, to_csv_bytes, to_csv_bytes_cached
 from ui.theme import COLORS, HORIZONTAL_LEGEND
 
 
@@ -33,10 +33,13 @@ def render(r: dict, sensors: SensorMeta) -> None:
         if n_conflicting:
             st.error(f"{n_conflicting} of these are conflicting: the repeated rows disagree on a value, not just "
                      "a harmless re-download.")
-        st.dataframe(dup.sort_values("conflicting", ascending=False), width='stretch')
+        render_capped_dataframe(dup.sort_values("conflicting", ascending=False), width='stretch')
+        st.download_button("Download duplicate pairs report CSV", to_csv_bytes_cached(dup, index=False),
+                            file_name="tms_duplicate_pairs_report.csv", mime="text/csv",
+                            icon=":material/download:")
     st.caption(f"Rows before: {len(raw)} -> after merge/dedup: {len(merged)}")
     st.download_button("Download merged raw archive CSV (all raw fields + source_file)",
-                        to_csv_bytes(merged, index=False), file_name="tms_merged_raw_archive.csv",
+                        to_csv_bytes_cached(merged, index=False), file_name="tms_merged_raw_archive.csv",
                         mime="text/csv", icon=":material/download:",
                         help="Every raw field as parsed (including the ones unused downstream), one row per "
                              "sensor/timestamp after merge/dedup, with which source file each row came from.")
@@ -59,8 +62,12 @@ def render(r: dict, sensors: SensorMeta) -> None:
     fig = go.Figure()
     for i, s in enumerate(sensors.ids):
         sub = merged[merged["sensor_id"] == s].sort_values("timestamp")
-        fig.add_trace(go.Scatter(x=sub["timestamp"], y=[sensors.label[s]] * len(sub), mode="markers",
-                                  marker=dict(symbol="line-ns", line=dict(width=2, color=COLORS["observed"]), size=9),
-                                  name="observed", legendgroup="observed", showlegend=(i == 0), hoverinfo="x"))
+        # Scattergl (WebGL), not Scatter (SVG) - a large multi-hundred-file
+        # upload can put tens of millions of points on this chart across all
+        # sensors combined, which an SVG-based trace renders as one DOM
+        # element per marker and chokes the browser on.
+        fig.add_trace(go.Scattergl(x=sub["timestamp"], y=[sensors.label[s]] * len(sub), mode="markers",
+                                    marker=dict(symbol="line-ns", line=dict(width=2, color=COLORS["observed"]), size=9),
+                                    name="observed", legendgroup="observed", showlegend=(i == 0), hoverinfo="x"))
     fig.update_layout(height=70 + 36 * len(sensors.ids), margin=dict(t=30), legend=HORIZONTAL_LEGEND)
     plot(fig)

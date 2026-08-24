@@ -15,7 +15,17 @@ from ui.theme import CATEGORICAL_COLORS
 from ui.tms.config import get_table
 from ui.tms.settings import TmsSettings
 
-_UPLOAD_KEY = "tms_uploaded_files"
+_UPLOAD_KEY_BASE = "tms_uploaded_files"
+_RELOAD_VERSION_KEY = "tms_reload_version"
+
+
+def _versioned(key_base: str) -> str:
+    """Appends the current "reload" version to a widget key - bumped by the
+    "Load sample data" button below. A plain st.session_state.pop() of the
+    file_uploader's key clears its *value* but Streamlit's file_uploader
+    component keeps showing the previously attached file client-side unless
+    the widget itself gets a new key (same trick as ui.tms.config.editor_key)."""
+    return f"{key_base}_{st.session_state.get(_RELOAD_VERSION_KEY, 0)}"
 
 
 @st.cache_data(show_spinner="Running TMS pipeline...")
@@ -26,22 +36,49 @@ def get_tms_pipeline(raw_wide, metadata_df, correction_params, calibration_param
                                      final_qc_cfg=final_qc_cfg, step_min=step_min)
 
 
+@st.cache_data(show_spinner="Loading TOMST export files...")
+def _load_tms_raw_dir(data_dir):
+    """Cached wrapper around TMS.load_tms_raw - without this, every rerun
+    (any widget interaction, not just a new upload) re-reads and re-parses
+    every TOMST export file from disk."""
+    return TMS.load_tms_raw(data_dir)
+
+
+@st.cache_data(show_spinner="Parsing uploaded files...")
+def _load_tms_raw_uploads(uploaded_files):
+    return TMS.load_tms_raw_from_uploads(uploaded_files)
+
+
 def render_data_source_tms(settings: TmsSettings, show_ui: bool):
     """Runs the TMS pipeline, returning (r, sensors) or calling st.stop() on
     error/empty selection. Upload controls only render when `show_ui` is set,
     i.e. on the "Loading & continuity" step - other steps reuse the last
     upload via session_state, same pattern as ui/data_source.py."""
+    upload_key = _versioned(_UPLOAD_KEY_BASE)
+
     if show_ui:
         st.subheader("Data source", divider="gray")
-        st.caption("No file? No problem - the bundled TOMST sample sensors load automatically below.")
-        uploaded_files = st.file_uploader(
-            "Drop your TOMST TMS-4 export files here (one or more per sensor)",
-            type=["csv"], accept_multiple_files=True, key=_UPLOAD_KEY,
-            help="Standard TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<part>.csv. Multiple "
-                 "downloads of the same physical sensor are grouped and merged automatically.",
-        )
+        st.caption("No file? No problem - the bundled TOMST sample sensors load below. Already uploaded "
+                   "something? **Load sample data** switches back to it.")
+        col_upload, col_sample = st.columns([5, 1])
+        with col_upload:
+            uploaded_files = st.file_uploader(
+                "Drop your TOMST TMS-4 export files here (one or more per sensor)",
+                type=["csv"], accept_multiple_files=True, key=upload_key,
+                help="Standard TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<part>.csv. Multiple "
+                     "downloads of the same physical sensor are grouped and merged automatically. A previously "
+                     "downloaded **tms_merged_raw_archive.csv** is also accepted - drop it in alone to resume a "
+                     "session, or alongside new raw files to add only what's new.",
+            )
+        with col_sample:
+            st.write("")  # vertical spacer to align the button with the uploader, not its label
+            st.write("")
+            if st.button("Load sample data", icon=":material/restart_alt:", width="stretch",
+                         help="Discards any uploaded files, switching back to the bundled TOMST sample sensors."):
+                st.session_state[_RELOAD_VERSION_KEY] = st.session_state.get(_RELOAD_VERSION_KEY, 0) + 1
+                st.rerun()
     else:
-        uploaded_files = st.session_state.get(_UPLOAD_KEY)
+        uploaded_files = st.session_state.get(upload_key)
 
     if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"
@@ -51,7 +88,7 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
                      "result), not a TOMST TMS-4 raw export - switch to the **Generic pipeline** above to process it.")
             st.stop()
         try:
-            raw_wide = TMS.load_tms_raw_from_uploads(uploaded_files)
+            raw_wide = _load_tms_raw_uploads(uploaded_files)
         except Exception as e:
             st.error(f"Could not parse the uploaded files: {e}")
             st.stop()
@@ -62,7 +99,7 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool):
             st.error(str(e))
             st.stop()
         source_label = str(data_dir)
-        raw_wide = TMS.load_tms_raw(data_dir)
+        raw_wide = _load_tms_raw_dir(data_dir)
 
     if show_ui:
         st.caption(f"Data source: **{source_label}** - each step (see sidebar) shows the data before/after that stage.")

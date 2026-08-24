@@ -6,7 +6,11 @@ from pathlib import Path
 
 # TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<download part>.csv
 FILENAME_RE = re.compile(r"data_(\d+)_(\d{4})_(\d{2})_(\d{2})_(\d+)\.csv$", re.IGNORECASE)
-TIMESTAMP_FORMAT = "%Y.%m.%d %H:%M"
+# TOMST's export tool emits any of these depending on the logger's regional
+# settings - tried in order, row by row, in parse_tms_records. The date-only
+# form shows up when a file has been resaved in Excel, which drops a
+# 00:00:00 time-of-day when formatting a date cell.
+TIMESTAMP_FORMATS = ["%Y.%m.%d %H:%M", "%d.%m.%Y %H:%M:%S", "%d.%m.%Y"]
 # raw field order (V1-V10) in the semicolon-separated, headerless export.
 # V1/V2/V4-V7 are the fields the processing actually uses (index, timestamp,
 # T1/T2/T3, Signal); V3/V8-V10 aren't used by any processing step but are
@@ -15,6 +19,13 @@ TIMESTAMP_FORMAT = "%Y.%m.%d %H:%M"
 # but isn't assumed to always be, so it's preserved rather than dropped.
 RAW_FIELDS = ["row_index", "timestamp_raw", "v3_raw", "t1_raw", "t2_raw", "t3_raw",
               "signal_raw", "shake", "err_flag", "v10_raw"]
+# raw_wide's own column set (what parse_tms_records produces, and what the
+# "Download merged raw archive CSV" button on the loading step exports) -
+# used to recognize that export when it's fed back in as an upload, so a
+# large multi-file session can be resumed without re-uploading every raw
+# TOMST file again.
+MERGED_EXPORT_COLUMNS = ["sensor_id", "source_file", "row_index", "timestamp", "v3_raw", "t1_raw",
+                          "t2_raw", "t3_raw", "signal_raw", "shake", "err_flag", "v10_raw"]
 CHANNELS = ["t1", "t2", "t3"]
 SIGNAL_CHANNELS = [*CHANNELS, "signal"]
 

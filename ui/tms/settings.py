@@ -40,17 +40,3 @@ def store() -> dict:
 def get_tms_settings() -> TmsSettings:
     s = store()
     return TmsSettings(qc_cfg=s["qc_cfg"], final_qc_cfg=s["final_qc_cfg"], step_min=s["step_min"])
-
-
-def is_dirty() -> bool:
-    """Whether any TMS QC parameter has been tuned away from its default -
-    see ui.mode's confirmation prompt before tearing this mode's state down."""
-    s = store()
-    fresh = _fresh()
-    return s["qc_cfg"] != fresh["qc_cfg"] or s["final_qc_cfg"] != fresh["final_qc_cfg"] or s["step_min"] != fresh["step_min"]
-
-
-def reset() -> None:
-    """Drops TMS settings back to a freshly-opened state - used by ui.mode
-    when switching away."""
-    st.session_state.tms_settings = _fresh()

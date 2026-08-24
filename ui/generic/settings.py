@@ -56,28 +56,6 @@ def store() -> dict:
     return st.session_state.settings
 
 
-def is_dirty() -> bool:
-    """Whether this pipeline holds anything a mode switch would discard:
-    tuned parameters, an uploaded file, or manual-validation overrides -
-    see ui.mode's confirmation prompt before tearing a mode's state down."""
-    return (
-        st.session_state.get("settings", DEFAULTS) != DEFAULTS
-        or bool(st.session_state.get("manual_overrides"))
-        or bool(st.session_state.get("data_source_uploaded_files"))
-        or bool(st.session_state.get("data_source_units_file"))
-    )
-
-
-def reset() -> None:
-    """Drops this pipeline back to a freshly-opened state - used by ui.mode
-    when switching away, so a stale settings/upload doesn't linger in
-    session_state for a pipeline nobody's looking at."""
-    st.session_state.settings = dict(DEFAULTS)
-    st.session_state.manual_overrides = {}
-    for key in ("data_source_uploaded_files", "data_source_channels", "data_source_units_file"):
-        st.session_state.pop(key, None)
-
-
 def get_settings() -> Settings:
     """Assembles the current value of every setting into a Settings object,
     for the pipeline run."""

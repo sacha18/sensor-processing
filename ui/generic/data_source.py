@@ -28,9 +28,32 @@ def get_pipeline(raw_long, step_min, outlier_cfg, max_gap, smooth_window, smooth
                                use_donor_regression=use_donor_regression, donor_min_corr=donor_min_corr)
 
 
-_UPLOAD_KEY = "data_source_uploaded_files"
-_CHANNELS_KEY = "data_source_channels"
-_UNITS_KEY = "data_source_units_file"
+@st.cache_data(show_spinner="Loading sensor files...")
+def _load_raw_dir(data_dir):
+    """Cached wrapper around P.load_raw - without this, every rerun (any
+    widget interaction, not just a new upload) re-reads and re-parses every
+    sensor file from disk."""
+    return P.load_raw(data_dir)
+
+
+@st.cache_data(show_spinner="Parsing uploaded files...")
+def _load_raw_uploads(uploaded_files):
+    return P.load_raw_from_uploads(uploaded_files)
+
+
+_UPLOAD_KEY_BASE = "data_source_uploaded_files"
+_CHANNELS_KEY_BASE = "data_source_channels"
+_UNITS_KEY_BASE = "data_source_units_file"
+_RELOAD_VERSION_KEY = "data_source_reload_version"
+
+
+def _versioned(key_base: str) -> str:
+    """Appends the current "reload" version to a widget key - bumped by the
+    "Load sample data" button below. A plain st.session_state.pop() of e.g.
+    the file_uploader's key clears its *value* but Streamlit's file_uploader
+    component keeps showing the previously attached file client-side unless
+    the widget itself gets a new key (same trick as ui.tms.config.editor_key)."""
+    return f"{key_base}_{st.session_state.get(_RELOAD_VERSION_KEY, 0)}"
 
 
 def render_data_source(settings: Settings, show_ui: bool):
@@ -39,17 +62,32 @@ def render_data_source(settings: Settings, show_ui: bool):
     (file upload, channel/unit pickers) are only rendered when `show_ui` is set,
     i.e. on the Loading step - other steps just reuse the last selection via
     session_state."""
+    upload_key = _versioned(_UPLOAD_KEY_BASE)
+    channels_key = _versioned(_CHANNELS_KEY_BASE)
+    units_key = _versioned(_UNITS_KEY_BASE)
+
     if show_ui:
         st.subheader("Data source", divider="gray")
-        st.caption("No file? No problem - the bundled sample data loads automatically below.")
-        uploaded_files = st.file_uploader(
-            "Drop your sensor files here (one file per sensor)",
-            type=["json", "csv"], accept_multiple_files=True, key=_UPLOAD_KEY,
-            help="JSON or CSV, same columns either way: phenomenon_time, result (observation_id optional). "
-                 "The filename (without extension) becomes that sensor's id.",
-        )
+        st.caption("No file? No problem - the bundled sample data loads below. Already uploaded something? "
+                   "**Load sample data** switches back to it.")
+        col_upload, col_sample = st.columns([5, 1])
+        with col_upload:
+            uploaded_files = st.file_uploader(
+                "Drop your sensor files here (one file per sensor)",
+                type=["json", "csv"], accept_multiple_files=True, key=upload_key,
+                help="JSON or CSV, same columns either way: phenomenon_time, result (observation_id optional). "
+                     "The filename (without extension) becomes that sensor's id.",
+            )
+        with col_sample:
+            st.write("")  # vertical spacer to align the button with the uploader, not its label
+            st.write("")
+            if st.button("Load sample data", icon=":material/restart_alt:", width="stretch",
+                         help="Discards any uploaded files and channel selection, switching back to the bundled "
+                              "sample dataset."):
+                st.session_state[_RELOAD_VERSION_KEY] = st.session_state.get(_RELOAD_VERSION_KEY, 0) + 1
+                st.rerun()
     else:
-        uploaded_files = st.session_state.get(_UPLOAD_KEY)
+        uploaded_files = st.session_state.get(upload_key)
 
     if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"
@@ -60,7 +98,7 @@ def render_data_source(settings: Settings, show_ui: bool):
                      "process it.")
             st.stop()
         try:
-            raw_long = P.load_raw_from_uploads(uploaded_files)
+            raw_long = _load_raw_uploads(uploaded_files)
         except Exception as e:
             st.error(f"Could not parse the uploaded files: {e}")
             st.stop()
@@ -71,7 +109,7 @@ def render_data_source(settings: Settings, show_ui: bool):
             st.error(str(e))
             st.stop()
         source_label = str(data_dir)
-        raw_long = P.load_raw(data_dir)
+        raw_long = _load_raw_dir(data_dir)
 
     all_channel_ids = sorted(raw_long["sensor_id"].unique())
     default_channels = [s for s in all_channel_ids if not is_telemetry_channel(s)]
@@ -80,21 +118,21 @@ def render_data_source(settings: Settings, show_ui: bool):
         col_ch, col_units = st.columns([3, 2])
         with col_ch:
             included_channels = st.multiselect(
-                "Channels to include", all_channel_ids, default=default_channels, key=_CHANNELS_KEY,
+                "Channels to include", all_channel_ids, default=default_channels, key=channels_key,
                 help="Device telemetry (battery, radio signal, enclosure temp/humidity, firmware version, ...) is "
                      "excluded by default - only real measurement channels feed the pipeline. Adjust if needed.",
             )
         with col_units:
             units_file = st.file_uploader(
-                "Optional: unit labels per sensor", type=["json", "csv"], key=_UNITS_KEY,
+                "Optional: unit labels per sensor", type=["json", "csv"], key=units_key,
                 help="Different sensors rarely measure the same thing (a piezometer in cm, a flow gauge in L/s, "
                      "a scintillometer in W/m2, ...) - drop a small mapping file to label charts accordingly. "
                      "Display only, doesn't affect any computation. CSV with sensor_id,unit columns, or JSON "
                      "{\"sensor_id\": \"unit\"}.",
             )
     else:
-        included_channels = st.session_state.get(_CHANNELS_KEY, default_channels)
-        units_file = st.session_state.get(_UNITS_KEY)
+        included_channels = st.session_state.get(channels_key, default_channels)
+        units_file = st.session_state.get(units_key)
 
     if not included_channels:
         st.error("No channels selected - pick at least one to run the pipeline.")
