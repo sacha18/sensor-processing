@@ -48,6 +48,18 @@ def to_csv_bytes_cached(df: pd.DataFrame, index: bool = True) -> bytes:
     return to_csv_bytes(df, index=index)
 
 
+def to_xlsx_bytes(df: pd.DataFrame, index: bool = False) -> bytes:
+    buf = io.BytesIO()
+    df.to_excel(buf, index=index, engine="openpyxl")
+    return buf.getvalue()
+
+
+@st.cache_data(show_spinner=False)
+def to_xlsx_bytes_cached(df: pd.DataFrame, index: bool = False) -> bytes:
+    """Same memoization rationale as to_csv_bytes_cached."""
+    return to_xlsx_bytes(df, index=index)
+
+
 def render_capped_dataframe(df: pd.DataFrame, *, max_rows: int = MAX_INLINE_ROWS, **dataframe_kwargs) -> None:
     """Renders at most `max_rows` of `df` (pass it pre-sorted so the head is
     the part that matters) - a duplicate/gap report can reach millions of

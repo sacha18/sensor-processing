@@ -88,6 +88,17 @@ def group_mean(df: pd.DataFrame, value_col: str, group_cols: list[str], time_col
     return out
 
 
+def resample_stats(df: pd.DataFrame, value_col: str, group_cols: list[str], freq: str) -> pd.DataFrame:
+    """One row per (group..., period) at the given pandas offset alias
+    (e.g. "h", "D", "W", "MS") - mean/max/min/std of value_col, plus n =
+    count of valid observations in that period. General-purpose version of
+    daily_stats for the free-form exploration section (ui/tms/steps/analysis.py)."""
+    grouper = pd.Grouper(key="timestamp", freq=freq)
+    return (df.groupby(group_cols + [grouper], dropna=False)[value_col]
+            .agg(mean="mean", max="max", min="min", std="std", n="count")
+            .reset_index())
+
+
 def daily_stats(df: pd.DataFrame, value_col: str, group_cols: list[str]) -> pd.DataFrame:
     """One row per (group..., calendar day): mean/max/min of value_col, plus
     n = count of valid (non-NA) observations that day. TMS-4's nominal

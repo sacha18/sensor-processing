@@ -13,8 +13,21 @@ from plotly.subplots import make_subplots
 import pipeline.tms as TMS
 from ui.charts import facet_grid, plot
 from ui.generic.data_source import SensorMeta
-from ui.format import to_csv_bytes
+from ui.format import render_capped_dataframe, to_csv_bytes, to_csv_bytes_cached, to_xlsx_bytes_cached
 from ui.theme import CATEGORICAL_COLORS, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, _rgba
+
+# Free-form exploration section (render's "3.") - metric label -> production
+# column, group-by label -> production column, resolution label -> pandas
+# offset alias (None = no aggregation, one row per raw reading).
+_EXPLORE_METRICS = {
+    "Soil moisture (VWC)": ("vwc_final", "VWC (m3/m3)"),
+    "Signal (corrected)": ("signal_corrected_final", "Signal"),
+    "T1 (raw)": ("t1_raw", "Temperature (C)"),
+    "T2 (raw)": ("t2_raw", "Temperature (C)"),
+    "T3 (raw)": ("t3_raw", "Temperature (C)"),
+}
+_EXPLORE_GROUP_COLS = {"Sensor": "sensor_id", "Treatment": "treatment", "Depth (cm)": "depth_cm", "Site": "site"}
+_EXPLORE_FREQS = {"Native (no aggregation)": None, "Hourly": "h", "Daily": "D", "Weekly": "W", "Monthly": "MS"}
 
 _DASH_STYLES = ["solid", "dot", "dash", "dashdot", "longdash", "longdashdot"]
 _UNIT_COLS = {"depth_cm", "z_cm"}
@@ -252,6 +265,73 @@ def _monthly_bar_chart(sub: pd.DataFrame, sensors: SensorMeta, height: int = 420
     return fig
 
 
+@st.fragment
+def _render_exploration(sub: pd.DataFrame) -> None:
+    """Isolated as a fragment - without it, changing Metric/Group by/
+    Resolution triggers a full-page rerun (recomputing every other chart on
+    this step), since Streamlit reruns the whole script on any widget
+    interaction by default. A fragment reruns just this function."""
+    st.write("**3. Free-form exploration**")
+    st.caption("Pick a metric, group by any combination of dimensions, and choose a time resolution - chart, "
+               "table and export below update accordingly.")
+    col_metric, col_group, col_freq = st.columns([2, 3, 2])
+    with col_metric:
+        metric_label = st.selectbox("Metric", list(_EXPLORE_METRICS), key="tms_explore_metric")
+    with col_group:
+        group_labels = st.multiselect("Group by", list(_EXPLORE_GROUP_COLS), default=["Sensor"],
+                                       key="tms_explore_group")
+    with col_freq:
+        freq_label = st.selectbox("Resolution", list(_EXPLORE_FREQS), index=2, key="tms_explore_freq")
+
+    value_col, y_title = _EXPLORE_METRICS[metric_label]
+    group_cols = [_EXPLORE_GROUP_COLS[g] for g in group_labels] or ["sensor_id"]
+    freq = _EXPLORE_FREQS[freq_label]
+    explore_df = sub.dropna(subset=[value_col])
+
+    if explore_df.empty:
+        st.info(f"No valid {metric_label} in this period.")
+        return
+
+    if freq is None:
+        agg = explore_df[group_cols + ["timestamp", value_col]].rename(columns={value_col: "mean"}).copy()
+        agg["n"] = 1
+    else:
+        agg = TMS.resample_stats(explore_df, value_col, group_cols, freq)
+        if "sensor_id" not in group_cols:
+            n_sensors = (explore_df.groupby(group_cols + [pd.Grouper(key="timestamp", freq=freq)], dropna=False)
+                         ["sensor_id"].nunique().reset_index(name="n_sensors"))
+            agg = agg.merge(n_sensors, on=group_cols + ["timestamp"])
+
+    group_label_col = agg[group_cols].astype(str).agg(" | ".join, axis=1) if len(group_cols) > 1 \
+        else agg[group_cols[0]].astype(str)
+    colors = _color_map(group_label_col)
+    fig = go.Figure()
+    for gval in sorted(group_label_col.unique()):
+        gsub = agg[group_label_col == gval].sort_values("timestamp")
+        hovertemplate = f"{gval}<br>%{{x}}<br>%{{y:.3f}}<br>n=%{{customdata}}<extra></extra>"
+        fig.add_trace(go.Scatter(
+            x=gsub["timestamp"], y=gsub["mean"], mode="lines", connectgaps=False,
+            line=dict(color=colors[gval], width=2), name=gval,
+            customdata=gsub["n"], hovertemplate=hovertemplate,
+        ))
+    fig.update_layout(height=420, margin=dict(t=20), legend=HORIZONTAL_LEGEND, yaxis_title=y_title)
+    plot(fig)
+
+    n_groups = group_label_col.nunique()
+    st.caption(f"{int(agg['n'].sum())} valid observation(s) across {n_groups} group(s) - hover a line for "
+               "its sample size (n) at each point.")
+    render_capped_dataframe(agg.sort_values(group_cols + ["timestamp"]), width='stretch', height=280)
+    col_csv, col_xlsx = st.columns(2)
+    with col_csv:
+        st.download_button("Download CSV", to_csv_bytes_cached(agg, index=False),
+                            file_name="tms_exploration.csv", mime="text/csv", icon=":material/download:")
+    with col_xlsx:
+        st.download_button("Download XLSX", to_xlsx_bytes_cached(agg),
+                            file_name="tms_exploration.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            icon=":material/download:")
+
+
 def render(r: dict, sensors: SensorMeta) -> None:
     production = r["production"]
 
@@ -295,6 +375,9 @@ def render(r: dict, sensors: SensorMeta) -> None:
         plot(_temp_chart(temp_long, t2_colors, t2_color_col))
     else:
         st.info("No valid temperature readings in this period.")
+
+    st.divider()
+    _render_exploration(sub)
 
     st.divider()
     st.write("**4. Monthly soil moisture distribution by sensor**")
