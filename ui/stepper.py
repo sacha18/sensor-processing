@@ -43,12 +43,15 @@ def render_stepper_controls(step: int, n_steps: int, session_key: str, gate_sect
     back_key = f"stepper_back_bar_{session_key}_{step}"
     next_key = f"stepper_next_bar_{session_key}_{step}"
 
+    # TODO: bottom offset padded +55px above the base 1.2rem so the buttons
+    # clear the Streamlit Community Cloud viewer badge pinned bottom-right -
+    # revisit/remove once that badge is gone (see app.py's hide_streamlit_style).
     st.markdown(
         f"""
         <style>
         [data-testid="stMain"] {{ padding-bottom: 6rem; }}
         div[class*="st-key-stepper_back_bar_{session_key}_"], div[class*="st-key-stepper_next_bar_{session_key}_"] {{
-            position: fixed !important; bottom: 1.2rem; z-index: 999998;
+            position: fixed !important; bottom: calc(1.2rem + 55px); z-index: 999998;
             width: fit-content !important; background: transparent !important;
             border: none !important; box-shadow: none !important; padding: 0 !important;
         }}
