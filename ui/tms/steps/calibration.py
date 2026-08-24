@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from pipeline.tms.config import POLY_COEF_COLUMNS, TOMST_UNIVERSAL_CALIBRATION
+from pipeline.tms.params import match_mask
 from ui.charts import plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
@@ -18,16 +19,44 @@ from ui.tms.config import (delete_row, example_csv, example_json, get_table, mer
 _SECTION = "tms_calibration"
 
 
-def _rule_summary(row: pd.Series) -> str:
-    coefs = ", ".join(f"{c}={row[c]:.3e}" for c in POLY_COEF_COLUMNS if pd.notna(row.get(c)))
-    window = ""
-    if pd.notna(row.get("valid_from")) or pd.notna(row.get("valid_to")):
-        window = f" - {row['valid_from'] if pd.notna(row['valid_from']) else '...'} → {row['valid_to'] if pd.notna(row['valid_to']) else '...'}"
-    notes = f" - _{row['notes']}_" if row.get("notes") else ""
-    return f"`{row['sensor_id'] or '*'}` - {coefs}{window}{notes}"
+def _is_present(df: pd.DataFrame, sensor_key) -> bool:
+    """Whether a rule's sensor_id/group still matches at least one currently
+    loaded sensor - match_mask's identity matching alone (no valid_from/
+    valid_to), so a rule from a previous upload that no longer applies to
+    any loaded sensor doesn't linger in the list."""
+    return match_mask(df, pd.Series({"sensor_id": sensor_key})).any()
 
 
-def _render_rules(calibrated: pd.DataFrame) -> None:
+def _clean(v, default=""):
+    # pandas' default string dtype represents a missing value as a plain
+    # float('nan') - truthy in Python, unlike None - so a bare `v or ...`/
+    # `if v` check silently treats a missing cell as present. pd.isna()
+    # catches it (and NaT/pd.NA/None) regardless of the column's dtype.
+    return default if pd.isna(v) else v
+
+
+def _rule_summary(table: pd.DataFrame, i) -> str:
+    """Reads each field with .at[] rather than a row Series from
+    iterrows() - when every value in a row is missing, pandas can unify
+    that row's dtype to datetime64 (picking a "common type" across its
+    columns), turning even string columns like sensor_id into NaT. .at[]
+    reads straight from each column's own array, unaffected by that."""
+    coef_values = {c: pd.to_numeric(table.at[i, c], errors="coerce") for c in POLY_COEF_COLUMNS}
+    coefs = ", ".join(f"{c}={v:.3e}" for c, v in coef_values.items() if pd.notna(v))
+    vf, vt = table.at[i, 'valid_from'], table.at[i, 'valid_to']
+    window = f" - {vf if pd.notna(vf) else '...'} → {vt if pd.notna(vt) else '...'}" if pd.notna(vf) or pd.notna(vt) else ""
+    notes_val = _clean(table.at[i, 'notes'])
+    notes = f" - _{notes_val}_" if notes_val else ""
+    sensor_id = _clean(table.at[i, 'sensor_id']) or "*"
+    return f"`{sensor_id}` - {coefs}{window}{notes}"
+
+
+def _sensor_group_options(sensors: SensorMeta) -> list[str]:
+    groups = get_table("metadata")["group_key"].dropna().astype(str).str.strip()
+    return ["*"] + sorted(set(sensors.ids) | {g for g in groups if g})
+
+
+def _render_rules(calibrated: pd.DataFrame, sensors: SensorMeta) -> None:
     uploaded = st.file_uploader(
         "Upload calibration params CSV/JSON", type=["csv", "json"], key="tms_calibration_upload",
         help="Supplied by your team, per sensor or sensor group - VWC = polynomial in corrected Signal (coef_0 = "
@@ -61,7 +90,10 @@ def _render_rules(calibrated: pd.DataFrame) -> None:
     with st.form("tms_calibration_add", clear_on_submit=True, border=True):
         st.write("**Add a calibration rule**")
         c1, c2 = st.columns([2, 1])
-        sensor_id = c1.text_input("Sensor or group", placeholder="*", help="Blank or \"*\" = every sensor.")
+        sensor_id = c1.selectbox(
+            "Sensor or group", _sensor_group_options(sensors), index=None, placeholder="*",
+            accept_new_options=True, key="tms_calibration_add_sensor",
+            help="Blank or \"*\" = every sensor. Pick a loaded sensor id or a metadata Group, or type a new one.")
         valid_from = c2.text_input("Valid from", placeholder="blank = always", help="e.g. 2025-06-01 or 2025-06-01 14:00")
         coef_values = {}
         coef_cols = st.columns(len(POLY_COEF_COLUMNS))
@@ -79,7 +111,7 @@ def _render_rules(calibrated: pd.DataFrame) -> None:
                     st.error("Couldn't parse Valid from/to - try e.g. 2025-06-01 or 2025-06-01 14:00.")
                 else:
                     new_row = pd.DataFrame([{
-                        "sensor_id": sensor_id.strip() or "*", **coef_values,
+                        "sensor_id": (sensor_id or "").strip() or "*", **coef_values,
                         "valid_from": vf, "valid_to": vt, "notes": notes.strip() or None,
                     }])
                     set_table("calibration", pd.concat([get_table("calibration"), new_row], ignore_index=True))
@@ -89,13 +121,20 @@ def _render_rules(calibrated: pd.DataFrame) -> None:
     if table.empty:
         st.caption("No calibration rules yet - add one above, use the TOMST default, or upload a file.")
     else:
-        st.write(f"**{len(table)} rule(s)**")
-        for i, row in table.iterrows():
-            c1, c2 = st.columns([6, 1])
-            c1.markdown(_rule_summary(row))
-            if c2.button("Delete", key=f"del_calibration_{i}", icon=":material/delete:"):
-                delete_row("calibration", i)
-                st.rerun()
+        present_mask = table["sensor_id"].apply(lambda k: _is_present(calibrated, k))
+        present, n_stale = table[present_mask], (~present_mask).sum()
+        if present.empty:
+            st.caption("No calibration rules match the currently loaded sensors.")
+        else:
+            st.write(f"**{len(present)} rule(s)**")
+            for i in present.index:
+                c1, c2 = st.columns([6, 1])
+                c1.markdown(_rule_summary(present, i))
+                if c2.button("Delete", key=f"del_calibration_{i}", icon=":material/delete:"):
+                    delete_row("calibration", i)
+                    st.rerun()
+        if n_stale:
+            st.caption(f"{n_stale} rule(s) hidden - sensor_id/group not present in the currently loaded data.")
 
     n_missing = int(calibrated["is_qc_missing_calibration_params"].sum())
     if n_missing:
@@ -108,7 +147,7 @@ def render(r: dict, sensors: SensorMeta) -> None:
 
     if not fullscreen:
         st.subheader("Calibration parameters", divider="gray")
-        _render_rules(calibrated)
+        _render_rules(calibrated, sensors)
 
     st.write("**Corrected Signal -> VWC**")
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s], key="tms_calibration_sensor")
