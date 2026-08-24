@@ -121,12 +121,17 @@ def set_table(name: str, df: pd.DataFrame) -> None:
     st.session_state[version_key] = st.session_state.get(version_key, 0) + 1
 
 
-def _parse_uploaded(uploaded_file) -> pd.DataFrame:
+def parse_uploaded(uploaded_file, skiprows: int = 0) -> pd.DataFrame:
+    """`skiprows` lets the caller skip title/notes rows sitting above the
+    real header - only meaningful for row-oriented formats (CSV/XLSX), not
+    JSON."""
     suffix = Path(uploaded_file.name).suffix.lower()
     content = uploaded_file.getvalue()
     if suffix == ".json":
         return pd.DataFrame(json.loads(content.decode("utf-8")))
-    return pd.read_csv(io.BytesIO(content))
+    if suffix == ".xlsx":
+        return pd.read_excel(io.BytesIO(content), skiprows=skiprows)
+    return pd.read_csv(io.BytesIO(content), skiprows=skiprows)
 
 
 def delete_row(name: str, index: int) -> None:
@@ -147,11 +152,11 @@ def parse_optional_datetime(text: str):
     return False if pd.isna(ts) else ts
 
 
-def merge_uploaded(name: str, uploaded_file) -> int:
-    """Parses an uploaded CSV/JSON and appends its rows to the table (upload
-    prefills, subsequent st.data_editor edits layer on top). Returns the
-    number of rows added."""
-    incoming = _coerce(name, _parse_uploaded(uploaded_file))
+def merge_uploaded(name: str, uploaded_file, skiprows: int = 0) -> int:
+    """Parses an uploaded CSV/JSON/XLSX and appends its rows to the table
+    (upload prefills, subsequent st.data_editor edits layer on top). Returns
+    the number of rows added."""
+    incoming = _coerce(name, parse_uploaded(uploaded_file, skiprows))
     merged = pd.concat([get_table(name), incoming], ignore_index=True).drop_duplicates()
     set_table(name, merged)
     return len(incoming)
