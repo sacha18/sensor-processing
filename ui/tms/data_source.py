@@ -1,8 +1,8 @@
-"""TMS "Data source" controls: upload/sample loading of TOMST TMS-4 export
-files and the cached pipeline run - mirrors ui/generic/data_source.py's shape,
-but for the wide multi-channel TMS format and its own config tables (metadata/
+"""TMS "Data source" controls: upload of TOMST TMS-4 export files and the
+cached pipeline run - mirrors ui/generic/data_source.py's shape, but for the
+wide multi-channel TMS format and its own config tables (metadata/
 correction/calibration/field events, see ui/tms/config.py) instead of a
-units-label file.
+units-label file. No bundled sample dataset - a real upload is required.
 """
 from __future__ import annotations
 
@@ -20,31 +20,32 @@ from ui.tms.settings import TmsSettings
 
 logger = logging.getLogger(__name__)
 
-_UPLOAD_KEY_BASE = "tms_uploaded_files"
-_RELOAD_VERSION_KEY = "tms_reload_version"
+_UPLOAD_KEY = "tms_uploaded_files"
+_RAW_CACHE_KEY = "tms_raw_wide_cache"
+_RAW_CACHE_FP_KEY = "tms_raw_wide_cache_fp"
+_NO_UPLOAD_FINGERPRINT = ("__none__",)
 LOADING_NAMESPACE = "tms_data_source"
-
-
-def _versioned(key_base: str) -> str:
-    """Appends the current "reload" version to a widget key - bumped by the
-    "Load sample data" button below. A plain st.session_state.pop() of the
-    file_uploader's key clears its *value* but Streamlit's file_uploader
-    component keeps showing the previously attached file client-side unless
-    the widget itself gets a new key (same trick as ui.tms.config.editor_key)."""
-    return f"{key_base}_{st.session_state.get(_RELOAD_VERSION_KEY, 0)}"
 
 
 def peek_tms_fingerprint() -> tuple:
     """The fingerprint render_data_source_tms will use this run, without
     rendering anything - Streamlit resolves a widget's current value into
     session_state before the script body runs, so this is accurate even
-    before st.file_uploader(key=upload_key) is (re-)called this pass. Lets
+    before st.file_uploader(key=_UPLOAD_KEY) is (re-)called this pass. Lets
     ui.tms.page decide, before doing any rendering, whether this run needs
-    the loading-gate priming pass (see ui.loading)."""
-    uploaded_files = st.session_state.get(_versioned(_UPLOAD_KEY_BASE))
+    the loading-gate priming pass (see ui.loading).
+
+    Falls back to the last-cached-upload fingerprint (not straight to "no
+    upload") when the file_uploader's own session_state value is empty -
+    Streamlit doesn't reliably keep a file_uploader's attached files across
+    many reruns where it isn't the widget being interacted with (e.g.
+    uploading something in a *different* file_uploader elsewhere in the
+    app), so this is the difference between "no file uploaded" and "already
+    uploaded and parsed earlier this session"."""
+    uploaded_files = st.session_state.get(_UPLOAD_KEY)
     if uploaded_files:
         return uploads_fingerprint(uploaded_files)
-    return ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
+    return st.session_state.get(_RAW_CACHE_FP_KEY) or _NO_UPLOAD_FINGERPRINT
 
 
 @st.cache_data(show_spinner="Running TMS pipeline...")
@@ -55,14 +56,6 @@ def get_tms_pipeline(raw_wide, metadata_df, correction_params, calibration_param
                                      final_qc_cfg=final_qc_cfg, step_min=step_min)
 
 
-@st.cache_data(show_spinner="Loading TOMST export files...")
-def _load_tms_raw_dir(data_dir):
-    """Cached wrapper around TMS.load_tms_raw - without this, every rerun
-    (any widget interaction, not just a new upload) re-reads and re-parses
-    every TOMST export file from disk."""
-    return TMS.load_tms_raw(data_dir)
-
-
 @st.cache_data(show_spinner="Parsing uploaded files...")
 def _load_tms_raw_uploads(uploaded_files):
     return TMS.load_tms_raw_from_uploads(uploaded_files)
@@ -70,45 +63,34 @@ def _load_tms_raw_uploads(uploaded_files):
 
 def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: bool = False):
     """Runs the TMS pipeline, returning (r, sensors) or calling st.stop() on
-    error/empty selection. Upload controls only render when `show_ui` is set,
-    i.e. on the "Loading & continuity" step - other steps reuse the last
-    upload via session_state, same pattern as ui/data_source.py.
+    error/empty selection/no upload. Upload controls only render when
+    `show_ui` is set, i.e. on the "Loading & continuity" step - other steps
+    reuse the last upload via session_state, same pattern as ui/data_source.py.
 
     `skip_heavy` still renders the upload controls (if show_ui) but returns
     (None, None) immediately, skipping the parse/pipeline work - used by the
     loading-gate priming pass (ui.loading). A widget not re-declared on a
     run gets unmounted client-side, and file_uploader loses track of
     already-attached files when that happens."""
-    upload_key = _versioned(_UPLOAD_KEY_BASE)
-
     if show_ui:
         st.subheader("Data source", divider="gray")
-        col_upload, col_sample = st.columns([5, 1])
-        with col_upload:
-            uploaded_files = st.file_uploader(
-                "Drop your TOMST TMS-4 export files here (one or more per sensor)",
-                type=["csv", "zip"], accept_multiple_files=True, key=upload_key,
-                help="Standard TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<part>.csv. Multiple "
-                     "downloads of the same physical sensor are grouped and merged automatically. For a large "
-                     "session (hundreds of files), zip them up and drop the single **.zip** instead - one upload "
-                     "is far more reliable than one browser request per file. A previously downloaded "
-                     "**tms_merged_raw_archive.csv** is also accepted - drop it in alone to resume a session, or "
-                     "alongside new raw files to add only what's new.",
-            )
-        with col_sample:
-            st.write("")  # vertical spacer to align the button with the uploader, not its label
-            st.write("")
-            if st.button("Load sample data", icon=":material/restart_alt:", width="stretch",
-                         help="Discards any uploaded files, switching back to the bundled TOMST sample sensors."):
-                st.session_state[_RELOAD_VERSION_KEY] = st.session_state.get(_RELOAD_VERSION_KEY, 0) + 1
-                st.rerun()
+        uploaded_files = st.file_uploader(
+            "Drop your TOMST TMS-4 export files here (one or more per sensor)",
+            type=["csv", "zip"], accept_multiple_files=True, key=_UPLOAD_KEY,
+            help="Standard TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<part>.csv. Multiple "
+                 "downloads of the same physical sensor are grouped and merged automatically. For a large "
+                 "session (hundreds of files), zip them up and drop the single **.zip** instead - one upload "
+                 "is far more reliable than one browser request per file. A previously downloaded "
+                 "**tms_merged_raw_archive.csv** is also accepted - drop it in alone to resume a session, or "
+                 "alongside new raw files to add only what's new.",
+        )
     else:
-        uploaded_files = st.session_state.get(upload_key)
+        uploaded_files = st.session_state.get(_UPLOAD_KEY)
 
     if uploaded_files:
         fingerprint = uploads_fingerprint(uploaded_files)
     else:
-        fingerprint = ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
+        fingerprint = st.session_state.get(_RAW_CACHE_FP_KEY) or _NO_UPLOAD_FINGERPRINT
 
     if skip_heavy:
         return None, None
@@ -131,13 +113,17 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: boo
                 "(possibly lost/corrupted in transit - try re-uploading just these):\n\n"
                 + "\n".join(f"- **{name}**: {err}" for name, err in failed)
             )
+        # Cached independently of the widget: Streamlit doesn't reliably keep
+        # a file_uploader's attached files across many reruns spent on other
+        # steps/widgets (see peek_tms_fingerprint) - once parsed, later runs
+        # reuse this instead of losing the upload.
+        st.session_state[_RAW_CACHE_KEY] = raw_wide
+        st.session_state[_RAW_CACHE_FP_KEY] = fingerprint
+    elif _RAW_CACHE_KEY in st.session_state:
+        raw_wide = st.session_state[_RAW_CACHE_KEY]
     else:
-        try:
-            data_dir = TMS.resolve_tms_data_dir()
-        except FileNotFoundError as e:
-            st.error(str(e))
-            st.stop()
-        raw_wide = _load_tms_raw_dir(data_dir)
+        st.info("Upload your TOMST TMS-4 export files above to get started.")
+        st.stop()
 
     r = get_tms_pipeline(
         raw_wide, get_table("metadata"), get_table("correction"), get_table("calibration"),
