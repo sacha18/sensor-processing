@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 # TOMST export naming: data_<sensor serial>_<yyyy>_<mm>_<dd>_<download part>.csv
 FILENAME_RE = re.compile(r"data_(\d+)_(\d{4})_(\d{2})_(\d{2})_(\d+)\.csv$", re.IGNORECASE)
@@ -55,8 +54,6 @@ POLY_COEF_COLUMNS = [f"coef_{i}" for i in range(MAX_POLY_DEGREE + 1)]
 # (a sensor_id="*" row) rather than hardcoded into apply_calibration, since
 # calibration must stay assignable through metadata, not baked into the code.
 TOMST_UNIVERSAL_CALIBRATION = {"coef_0": -0.101168511, "coef_1": 0.000118119, "coef_2": 0.000000017}
-
-SAMPLE_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "sample_data" / "tms"
 
 DEFAULT_TMS_QC_CFG = {
     # flatline_min_run is much higher than the generic pipeline's default (6): TMS

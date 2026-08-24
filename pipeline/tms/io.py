@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import FILENAME_RE, MERGED_EXPORT_COLUMNS, RAW_FIELDS, SAMPLE_DATA_DIR, TIMESTAMP_FORMATS
+from .config import FILENAME_RE, MERGED_EXPORT_COLUMNS, RAW_FIELDS, TIMESTAMP_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +43,6 @@ def download_sort_key(filename: str) -> tuple:
     if not m:
         raise ValueError(f"'{filename}' doesn't match the TOMST export pattern")
     return tuple(int(g) for g in m.groups()[1:])
-
-
-def _has_sensor_files(d: Path) -> bool:
-    return any(FILENAME_RE.search(f.name) for f in d.glob("*.csv"))
-
-
-def resolve_tms_data_dir(preferred: str | Path | None = None) -> Path:
-    candidates = [Path(preferred)] if preferred else []
-    candidates += [SAMPLE_DATA_DIR]
-    for c in candidates:
-        if c.exists() and _has_sensor_files(c):
-            return c
-    raise FileNotFoundError(
-        "No TOMST TMS-4 csv files (data_<serial>_<yyyy>_<mm>_<dd>_<part>.csv) found in any of: "
-        f"{[str(c) for c in candidates]}."
-    )
 
 
 def _parse_timestamps(raw: pd.Series, name: str) -> pd.Series:
@@ -140,15 +124,6 @@ def _stack_frames(frames: list) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True).sort_values(["sensor_id", "timestamp"]).reset_index(drop=True)
 
 
-def load_tms_raw(data_dir: Path = None) -> pd.DataFrame:
-    """Load every TOMST export file in data_dir (falls back to the bundled sample data)."""
-    data_dir = resolve_tms_data_dir(data_dir) if data_dir is None else Path(data_dir)
-    files = sorted((f for f in data_dir.glob("*.csv") if FILENAME_RE.search(f.name)), key=lambda f: f.name)
-    if not files:
-        raise FileNotFoundError(f"No TOMST TMS-4 csv files in {data_dir}")
-    return _stack_frames([parse_tms_records(f.name, f.read_bytes()) for f in files])
-
-
 def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
     """Expands a .zip into (filename, content) pairs, skipping directories,
     hidden/system entries (.DS_Store, __MACOSX/...), and non-.csv members."""
@@ -166,9 +141,9 @@ def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
 
 def load_tms_raw_from_uploads(uploaded_files: list, batch_size: int = UPLOAD_BATCH_SIZE
                                ) -> tuple[pd.DataFrame, list[tuple[str, str]]]:
-    """Load from a list of file-like objects (e.g. Streamlit's UploadedFile) -
-    same schema as load_tms_raw. Each entry is a raw TOMST export, a merged
-    raw archive, or a .zip of either (mixable in one upload).
+    """Load from a list of file-like objects (e.g. Streamlit's UploadedFile).
+    Each entry is a raw TOMST export, a merged raw archive, or a .zip of
+    either (mixable in one upload).
 
     Returns (raw_wide, failures), with failures as
     [(filename, error message), ...] for any file that didn't parse - one
