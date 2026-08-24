@@ -58,14 +58,15 @@ def render(r: dict, sensors: SensorMeta) -> None:
 
 def _render_field_events() -> None:
     st.subheader("Known field events", divider="gray")
-    st.caption("Manually logged events (maintenance visit, vegetation cut, animal disturbance, harvest, "
-               "stabilization period, ...) that flag a channel over a date range, regardless of what the "
-               "automatic methods above catch. Channel = **vwc** flags the final calibrated series instead of a "
-               "raw channel (see Final QC); **all** covers every raw channel. Leave Sensor and/or Treatment blank "
-               "(or \"*\") for a blanket rule - e.g. every sensor before a stabilization date, or every sensor of "
-               "one treatment during a harvest window.")
 
-    uploaded = st.file_uploader("Upload field events CSV/JSON", type=["csv", "json"], key="tms_field_events_upload")
+    uploaded = st.file_uploader(
+        "Upload field events CSV/JSON", type=["csv", "json"], key="tms_field_events_upload",
+        help="Manually logged events (maintenance visit, vegetation cut, animal disturbance, harvest, "
+             "stabilization period, ...) that flag a channel over a date range, regardless of what the automatic "
+             "methods above catch. Channel = vwc flags the final calibrated series instead of a raw channel (see "
+             "Final QC); all covers every raw channel. Leave Sensor and/or Treatment blank (or \"*\") for a "
+             "blanket rule - e.g. every sensor before a stabilization date, or every sensor of one treatment "
+             "during a harvest window.")
     if uploaded is not None and st.session_state.get("tms_field_events_upload_name") != uploaded.name:
         n = merge_uploaded("field_events", uploaded)
         st.session_state["tms_field_events_upload_name"] = uploaded.name

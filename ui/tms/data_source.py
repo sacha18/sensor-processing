@@ -83,8 +83,6 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: boo
 
     if show_ui:
         st.subheader("Data source", divider="gray")
-        st.caption("No file? No problem - the bundled TOMST sample sensors load below. Already uploaded "
-                   "something? **Load sample data** switches back to it.")
         col_upload, col_sample = st.columns([5, 1])
         with col_upload:
             uploaded_files = st.file_uploader(
@@ -116,7 +114,6 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: boo
         return None, None
 
     if uploaded_files:
-        source_label = f"{len(uploaded_files)} uploaded file(s)"
         logger.info("TMS data source: %d file(s) received from the browser", len(uploaded_files))
         generic_looking = [f.name for f in uploaded_files if looks_like_generic_export(f.name, f.getvalue())]
         if generic_looking:
@@ -140,11 +137,7 @@ def render_data_source_tms(settings: TmsSettings, show_ui: bool, skip_heavy: boo
         except FileNotFoundError as e:
             st.error(str(e))
             st.stop()
-        source_label = str(data_dir)
         raw_wide = _load_tms_raw_dir(data_dir)
-
-    if show_ui:
-        st.caption(f"Data source: **{source_label}** - each step (see sidebar) shows the data before/after that stage.")
 
     r = get_tms_pipeline(
         raw_wide, get_table("metadata"), get_table("correction"), get_table("calibration"),

@@ -28,23 +28,23 @@ def render_sidebar_tms(step: int) -> None:
 def _continuity_params(s: dict) -> None:
     auto = st.toggle("Auto-detect sampling step", value=s["step_min"] is None,
                       help="Infers each sensor's own nominal logging interval from the modal gap between its "
-                           "timestamps, rather than assuming one fixed interval for every sensor.")
+                           "timestamps, rather than assuming one fixed interval for every sensor. Used to decide "
+                           "what counts as a gap in the continuity report - a delta more than 1.5x this step.")
     if auto:
         s["step_min"] = None
     else:
         options = [15, 30, 60]
         s["step_min"] = st.selectbox("Nominal step (min)", options, index=options.index(s["step_min"] or 15))
-    st.caption("Used to decide what counts as a gap in the continuity report - a delta more than 1.5x this step.")
 
 
 def _initial_qc_params(s: dict) -> None:
     channel = st.selectbox("Channel", SIGNAL_CHANNELS, format_func=str.upper,
                             help="T1/T2/T3/Signal are QC'd independently - a problem on one channel doesn't flag the others.")
     c = s["qc_cfg"][channel]
-    st.caption("Independent methods, each catching a different fault mode - a point is dropped if ANY enabled "
-               "method flags it.")
 
-    c["use_hampel"] = st.toggle("Spike filter (Hampel)", value=c["use_hampel"])
+    c["use_hampel"] = st.toggle("Spike filter (Hampel)", value=c["use_hampel"],
+                                 help="Independent methods below, each catching a different fault mode - a point "
+                                      "is dropped if ANY enabled method flags it.")
     c["hampel_k"] = st.slider("MAD threshold", 3.0, 10.0, float(c["hampel_k"]), 0.5, disabled=not c["use_hampel"])
     c["hampel_half_window"] = st.slider("Window (points each side)", 2, 10, c["hampel_half_window"], disabled=not c["use_hampel"])
     st.divider()

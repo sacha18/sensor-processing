@@ -89,8 +89,6 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
 
     if show_ui:
         st.subheader("Data source", divider="gray")
-        st.caption("No file? No problem - the bundled sample data loads below. Already uploaded something? "
-                   "**Load sample data** switches back to it.")
         col_upload, col_sample = st.columns([5, 1])
         with col_upload:
             uploaded_files = st.file_uploader(
@@ -119,7 +117,6 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
         return None, None, None
 
     if uploaded_files:
-        source_label = f"{len(uploaded_files)} uploaded file(s)"
         tms_looking = [f.name for f in uploaded_files if looks_like_tms_export(f.name, f.getvalue())]
         if tms_looking:
             st.error(f"{', '.join(tms_looking)} looks like a TOMST TMS-4 raw export, not the generic pipeline's "
@@ -137,7 +134,6 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
         except FileNotFoundError as e:
             st.error(str(e))
             st.stop()
-        source_label = str(data_dir)
         raw_long = _load_raw_dir(data_dir)
 
     all_channel_ids = sorted(raw_long["sensor_id"].unique())
@@ -175,9 +171,6 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
         except Exception as e:
             if show_ui:
                 st.warning(f"Could not parse the unit mapping file: {e}")
-
-    if show_ui:
-        st.caption(f"Data source: **{source_label}** - each step (see sidebar) shows the data before/after that stage.")
 
     r = get_pipeline(raw_long, step_min=settings.step_min, outlier_cfg=settings.outlier_cfg, max_gap=settings.max_gap,
                       smooth_window=settings.smooth_window, smooth_method=settings.smooth_method,

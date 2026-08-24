@@ -43,15 +43,15 @@ def render(r: dict) -> None:
     _seed_from_loaded_sensors(r)
 
     st.subheader("Deployment metadata", divider="gray")
-    st.caption("One row per sensor per install period (a logger can be redeployed) - site, treatment, position, "
-               "depth, and the channel labels for a non-standard installation (T1/T2/T3's usual near-surface "
-               "meaning doesn't hold for a deeper install). Pre-filled below with the sensors already loaded, "
-               "each sensor's first observed timestamp as a starting **install start**, and the standard "
-               "near-surface position/channel labels as a **suggestion** - correct any sensor installed "
-               "differently (deeper burial, different install date, ...). Upload to prefill more, then edit "
-               "directly; hit **Apply** to use the edited table.")
 
-    uploaded = st.file_uploader("Upload metadata CSV/JSON", type=["csv", "json"], key="tms_metadata_upload")
+    uploaded = st.file_uploader(
+        "Upload metadata CSV/JSON", type=["csv", "json"], key="tms_metadata_upload",
+        help="One row per sensor per install period (a logger can be redeployed) - site, treatment, position, "
+             "depth, and the channel labels for a non-standard installation (T1/T2/T3's usual near-surface "
+             "meaning doesn't hold for a deeper install). Pre-filled below with the sensors already loaded, "
+             "each sensor's first observed timestamp as a starting install start, and the standard near-surface "
+             "position/channel labels as a suggestion - correct any sensor installed differently. Upload to "
+             "prefill more, then edit directly; hit Apply to use the edited table.")
     if uploaded is not None and st.session_state.get("tms_metadata_upload_name") != uploaded.name:
         n = merge_uploaded("metadata", uploaded)
         st.session_state["tms_metadata_upload_name"] = uploaded.name

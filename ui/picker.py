@@ -46,13 +46,9 @@ def render_picker(generic_page, tms_page) -> None:
     col_generic, col_tms = st.columns(2)
     with col_generic, st.container(border=True, key="picker-card-generic"):
         st.subheader(":material/show_chart: Generic pipeline")
-        st.write("Single-value sensors - dedup, regularization, "
-                 "outlier detection, gap filling, and a production dataset.")
         if st.button("Open", key="pick_generic", type="primary", width="stretch"):
             st.switch_page(generic_page)
     with col_tms, st.container(border=True, key="picker-card-tms"):
         st.subheader(":material/grass: TOMST TMS-4 (soil)")
-        st.write("TOMST TMS-4 soil sensor exports (T1/T2/T3/Signal) - metadata, signal correction, "
-                 "VWC calibration, and cross-channel QC.")
         if st.button("Open", key="pick_tms", type="primary", width="stretch"):
             st.switch_page(tms_page)

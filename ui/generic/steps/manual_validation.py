@@ -39,9 +39,6 @@ def render(r: dict, sensors: SensorMeta, overrides_applied_count: int) -> None:
         return
 
     st.subheader("Manual validation", divider="gray")
-    st.caption("Review each suggestion the pipeline made for a **suspect value** (flagged outlier) or **missing "
-               "data** point, then hit **Validate** to commit your review into the production dataset used by "
-               "every step below.")
 
     review_df = r["production"].loc[r["production"]["fill_method"] != "observed",
                                      ["sensor_id", "timestamp", "is_outlier", "value_raw", "fill_method", "value_clean"]].copy()
@@ -111,7 +108,8 @@ def render(r: dict, sensors: SensorMeta, overrides_applied_count: int) -> None:
 
                 b1, b2, b3 = st.columns([1, 1, 2], gap="small")
                 validate_clicked = b1.button(f"Validate ({len(filtered_df)})", type="primary", icon=":material/check_circle:",
-                                              help="Commit the table above - accepted suggestions and overrides alike - into the production dataset.")
+                                              help="Commit the table above - accepted suggestions and overrides alike - into "
+                                                   "the production dataset used by every step below.")
                 clear_clicked = b2.button("Clear", icon=":material/restart_alt:",
                                            help="Revert these rows back to the pipeline's automatic suggestions.")
                 b3.caption(f"{n_overridden}/{len(edited)} overridden in this draft - not committed until you hit Validate.")

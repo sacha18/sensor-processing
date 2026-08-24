@@ -35,12 +35,11 @@ def _regularize_params(s: dict) -> None:
 
 
 def _outlier_params(s: dict) -> None:
-    st.caption("Independent methods, each catching a different fault mode - a point is dropped if ANY enabled "
-               "method flags it.")
-
     s["use_hampel"] = st.toggle("Spike filter (Hampel)", value=s["use_hampel"],
-                                 help="Flags a point that deviates by more than k x MAD from the median of a local window. "
-                                      "A slow multi-step ramp stays inside the window's spread and is not flagged; an isolated spike is.")
+                                 help="Independent methods below, each catching a different fault mode - a point is "
+                                      "dropped if ANY enabled method flags it. This one flags a point that deviates "
+                                      "by more than k x MAD from the median of a local window. A slow multi-step "
+                                      "ramp stays inside the window's spread and is not flagged; an isolated spike is.")
     s["hampel_k"] = st.slider("MAD threshold", 3.0, 10.0, s["hampel_k"], 0.5, disabled=not s["use_hampel"])
     s["hampel_hw"] = st.slider("Window (points each side)", 2, 10, s["hampel_hw"], disabled=not s["use_hampel"])
     st.divider()
@@ -65,7 +64,6 @@ def _outlier_params(s: dict) -> None:
 
 def _gapfill_params(s: dict) -> None:
     s["max_gap"] = st.slider("Max gap linearly interpolated (steps)", 1, 12, s["max_gap"])
-    st.caption("Beyond this many missing steps, filling switches to regression against the most correlated sensor (\"donor\").")
     st.divider()
 
     s["use_donor_regression"] = st.toggle("Imputation via correlated time series", value=s["use_donor_regression"],
@@ -82,10 +80,10 @@ def _gapfill_params(s: dict) -> None:
 def _smoothing_params(s: dict) -> None:
     s["smooth_method"] = st.selectbox("Smoothing method", ["mean", "median"],
                                        index=["mean", "median"].index(s["smooth_method"]))
-    s["smooth_window"] = st.slider("Smoothing window (steps, centered)", 1, 21, s["smooth_window"], step=2)
-    st.caption("A rolling average/median laid over the cleaned series to show trend without high-frequency noise - "
-               "shown alongside, not instead of, the cleaned data. The interactive aggregation period above it on "
-               "the page has its own, independent control.")
+    s["smooth_window"] = st.slider("Smoothing window (steps, centered)", 1, 21, s["smooth_window"], step=2,
+                                    help="A rolling average/median laid over the cleaned series, shown alongside "
+                                         "(not instead of) the cleaned data. Independent of the aggregation period "
+                                         "control on the page above.")
 
 
 _RENDERERS = {

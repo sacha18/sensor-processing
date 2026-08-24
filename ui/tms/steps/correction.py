@@ -26,7 +26,11 @@ def _rule_summary(row: pd.Series) -> str:
 
 
 def _render_rules(corrected: pd.DataFrame) -> None:
-    uploaded = st.file_uploader("Upload correction params CSV/JSON", type=["csv", "json"], key="tms_correction_upload")
+    uploaded = st.file_uploader(
+        "Upload correction params CSV/JSON", type=["csv", "json"], key="tms_correction_upload",
+        help="Supplied by your team, per sensor or sensor group (matched via the metadata Group column) - not "
+             "derived by this app. One-factor: a x Signal. Two-factor: a x Signal + b. Sensor = \"*\" applies to "
+             "every sensor.")
     with st.expander("Example file format", icon=":material/help:"):
         st.caption("Columns: `sensor_id` (blank or `*` = every sensor), `correction_type` "
                    "(`one_factor`/`two_factor`), `factor_a`, `factor_b` (two-factor only), "
@@ -93,9 +97,6 @@ def render(r: dict, sensors: SensorMeta) -> None:
 
     if not fullscreen:
         st.subheader("Correction parameters", divider="gray")
-        st.caption("Supplied by your team, per sensor or sensor group (matched via the metadata **Group** column) - "
-                   "not derived by this app. One-factor: `a x Signal`. Two-factor: `a x Signal + b`. "
-                   "Sensor = \"*\" applies to every sensor.")
         _render_rules(corrected)
 
     st.write("**Before / after - QC'd Signal vs. corrected Signal**")

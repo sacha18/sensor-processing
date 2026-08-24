@@ -256,10 +256,7 @@ def render(r: dict, sensors: SensorMeta) -> None:
     production = r["production"]
 
     st.subheader("Analysis", divider="gray")
-    st.caption("Downstream analysis of the finished production dataset - nothing here feeds back into the "
-               "pipeline. Individual sensors are drawn thin/transparent, group averages thick on top - hover "
-               "a thick line for its sample size (n). Colored by treatment where configured, falling back to "
-               "depth/level (the more reliably populated field) otherwise, so lines never collapse to one grey.")
+    st.caption("Downstream analysis of the finished production dataset - nothing here feeds back into the pipeline.")
 
     production = _with_single(production)
     sm_color_col, sm_dash_col = _pick_color_dash_cols(production, "treatment", "depth_cm")
@@ -279,7 +276,11 @@ def render(r: dict, sensors: SensorMeta) -> None:
     period_options = _period_options(production)
     period_label = st.selectbox("Period", list(period_options), key="tms_analysis_period",
                                  help="Applies to the two charts below - full range, a calendar year, or a "
-                                      "growing season (Apr 1 - Oct 31).")
+                                      "growing season (Apr 1 - Oct 31). In those charts, individual sensors are "
+                                      "drawn thin/transparent, group averages thick on top - hover a thick line "
+                                      "for its sample size (n). Colored by treatment where configured, falling "
+                                      "back to depth/level (the more reliably populated field) otherwise, so "
+                                      "lines never collapse to one grey.")
     sub = _filter_period(production, period_options[period_label])
 
     st.write("**1. Soil moisture - full series**")

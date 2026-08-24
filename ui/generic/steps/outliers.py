@@ -33,9 +33,8 @@ def render(r: dict, sensors: SensorMeta, use_donor_regression: bool) -> None:
 
     if not fullscreen:
         st.subheader("Outlier detection (multiple methods)", divider="gray")
-        st.caption("Independent methods (see sidebar), each catching a different fault mode - a point is dropped if "
-                   "ANY enabled method flags it. Colors below show which method caught each point (when several "
-                   "agree, priority is spike > flatline > extreme value > rate-of-change).")
+        st.caption("Colors below show which method caught each point (when several agree, priority is spike > "
+                   "flatline > extreme value > rate-of-change).")
 
         cols = st.columns(5)
         cols[0].metric("Total outliers", len(out_rows))

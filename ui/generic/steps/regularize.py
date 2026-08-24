@@ -24,9 +24,8 @@ def render(r: dict, step_min: int, sensors: SensorMeta) -> None:
     st.caption("A slot only counts as \"missing\" if it falls within that sensor's own deployment window (no fabricated data outside its measurement period).")
 
     st.write("**Grid coverage per sensor**")
-    st.caption("Each row is one sensor's deployment window snapped onto the shared grid - green where a raw "
-               "reading landed on a slot, red where snapping to the grid left a gap to fill later. Blank "
-               "stretches are outside that sensor's deployment window (no deployment, not a gap).")
+    st.caption("Green = a raw reading snapped onto the grid, red = snapping left a gap to fill later, blank = "
+               "outside that sensor's deployment window (not a gap).")
     fig = go.Figure()
     for i, s in enumerate(sensors.ids):
         sub = reg[reg["sensor_id"] == s]

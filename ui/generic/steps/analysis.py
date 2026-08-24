@@ -106,15 +106,14 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
     plot(fig)
 
     st.subheader(":material/bar_chart: Aggregation - interactive overlay", divider="gray")
-    st.caption("Per-sensor summary stats over a chosen period, computed on the cleaned+gap-filled series. "
-               "Pick the period and which sensors/statistics to include - everything overlays on a single chart "
-               "so series and stats are directly comparable.")
 
     a1, a2, a3 = st.columns([1, 2, 2])
     with a1:
         analysis_freq_label = st.selectbox(
             "Aggregation period", list(ANALYSIS_AGG_OPTIONS), index=1,
-            key="analysis_agg_freq")
+            key="analysis_agg_freq",
+            help="Per-sensor summary stats computed on the cleaned+gap-filled series. Everything overlays on a "
+                 "single chart below so series and stats are directly comparable.")
     with a2:
         analysis_sensors = st.multiselect("Sensors to overlay", sensors.ids, default=sensors.ids, key="analysis_agg_sensors")
     with a3:
@@ -148,8 +147,7 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
                         mime="text/csv", icon=":material/download:")
 
     st.subheader(f":material/show_chart: Smoothing ({smooth_method}, window={smooth_window} steps)", divider="gray")
-    st.caption("Rolling smoothing layered over the cleaned series - shown alongside it, not replacing it, so the "
-               "underlying QC'd data stays available. Method/window in the sidebar.")
+    st.caption("Method/window in the sidebar.")
 
     st.write("**All sensors - smoothed**")
     fig = facet_grid([sensors.label[s] for s in sensors.ids])

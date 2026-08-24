@@ -28,7 +28,12 @@ def _rule_summary(row: pd.Series) -> str:
 
 
 def _render_rules(calibrated: pd.DataFrame) -> None:
-    uploaded = st.file_uploader("Upload calibration params CSV/JSON", type=["csv", "json"], key="tms_calibration_upload")
+    uploaded = st.file_uploader(
+        "Upload calibration params CSV/JSON", type=["csv", "json"], key="tms_calibration_upload",
+        help="Supplied by your team, per sensor or sensor group - VWC = polynomial in corrected Signal (coef_0 = "
+             "constant term). Leave higher-order coefficients blank for a lower-degree equation (e.g. only "
+             "coef_0/coef_1 set = a straight line). Sensor = \"*\" applies to every sensor - useful since TOMST's "
+             "own calibration is one universal equation, not one per sensor.")
     with st.expander("Example file format", icon=":material/help:"):
         st.caption("Columns: `sensor_id` (blank or `*` = every sensor), `coef_0`..`coef_5` (polynomial "
                    "coefficients, `coef_0` required, leave higher orders blank for a lower-degree equation), "
@@ -103,10 +108,6 @@ def render(r: dict, sensors: SensorMeta) -> None:
 
     if not fullscreen:
         st.subheader("Calibration parameters", divider="gray")
-        st.caption("Supplied by your team, per sensor or sensor group - VWC = polynomial in corrected Signal "
-                   "(coef_0 = constant term). Leave higher-order coefficients blank for a lower-degree equation "
-                   "(e.g. only coef_0/coef_1 set = a straight line). Sensor = \"*\" applies to every sensor - useful "
-                   "since TOMST's own calibration is one universal equation, not one per sensor.")
         _render_rules(calibrated)
 
     st.write("**Corrected Signal -> VWC**")
