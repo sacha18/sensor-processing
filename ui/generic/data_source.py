@@ -10,7 +10,6 @@ import streamlit as st
 import pipeline.generic as P
 from ui.format import is_telemetry_channel, looks_like_tms_export
 from ui.generic.settings import Settings
-from ui.loading import finish_loading_gate, uploads_fingerprint
 from ui.theme import CATEGORICAL_COLORS
 
 
@@ -46,7 +45,6 @@ _UPLOAD_KEY_BASE = "data_source_uploaded_files"
 _CHANNELS_KEY_BASE = "data_source_channels"
 _UNITS_KEY_BASE = "data_source_units_file"
 _RELOAD_VERSION_KEY = "data_source_reload_version"
-LOADING_NAMESPACE = "generic_data_source"
 
 
 def _versioned(key_base: str) -> str:
@@ -56,19 +54,6 @@ def _versioned(key_base: str) -> str:
     component keeps showing the previously attached file client-side unless
     the widget itself gets a new key (same trick as ui.tms.config.editor_key)."""
     return f"{key_base}_{st.session_state.get(_RELOAD_VERSION_KEY, 0)}"
-
-
-def peek_generic_fingerprint() -> tuple:
-    """The fingerprint render_data_source will use this run, without
-    rendering anything - Streamlit resolves a widget's current value into
-    session_state before the script body runs, so this is accurate even
-    before st.file_uploader(key=upload_key) is (re-)called this pass. Lets
-    ui.generic.page decide, before doing any rendering, whether this run
-    needs the loading-gate priming pass (see ui.loading)."""
-    uploaded_files = st.session_state.get(_versioned(_UPLOAD_KEY_BASE))
-    if uploaded_files:
-        return uploads_fingerprint(uploaded_files)
-    return ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
 
 
 def render_data_source(settings: Settings, show_ui: bool):
@@ -103,11 +88,6 @@ def render_data_source(settings: Settings, show_ui: bool):
                 st.rerun()
     else:
         uploaded_files = st.session_state.get(upload_key)
-
-    if uploaded_files:
-        fingerprint = uploads_fingerprint(uploaded_files)
-    else:
-        fingerprint = ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
 
     if uploaded_files:
         source_label = f"{len(uploaded_files)} uploaded file(s)"
@@ -173,7 +153,6 @@ def render_data_source(settings: Settings, show_ui: bool):
     r = get_pipeline(raw_long, step_min=settings.step_min, outlier_cfg=settings.outlier_cfg, max_gap=settings.max_gap,
                       smooth_window=settings.smooth_window, smooth_method=settings.smooth_method,
                       use_donor_regression=settings.use_donor_regression, donor_min_corr=settings.donor_min_corr)
-    finish_loading_gate(LOADING_NAMESPACE, fingerprint)
     sensor_ids = sorted(r["reg_long"]["sensor_id"].unique())
     sensors = SensorMeta(
         ids=sensor_ids,

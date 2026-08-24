@@ -9,10 +9,9 @@ from __future__ import annotations
 import streamlit as st
 
 from ui.fullscreen import any_fullscreen, inject_chrome_hide_css
-from ui.loading import loading_pending
 from ui.stepper import render_stepper_controls
 from ui.tms.config import init_tms_config
-from ui.tms.data_source import LOADING_NAMESPACE, peek_tms_fingerprint, render_data_source_tms
+from ui.tms.data_source import render_data_source_tms
 from ui.tms.nav import TMS_STEP_NAMES, render_nav_tms
 from ui.tms.settings import get_tms_settings, init_tms_settings
 from ui.tms.sidebar import render_sidebar_tms
@@ -64,17 +63,6 @@ def render_tms_page(picker_page) -> None:
 
     render_sidebar_tms(step)
     tms_settings = get_tms_settings()
-
-    # Priming pass: a new/changed upload needs a run that paints Next as
-    # disabled *before* the heavy parse/pipeline call blocks the script -
-    # see ui.loading for why this can't just be a `disabled=` on the button
-    # rendered after that call. This pass skips the heavy work and the step
-    # content entirely, then reruns itself into the pass that does it.
-    if loading_pending(LOADING_NAMESPACE, peek_tms_fingerprint()):
-        render_stepper_controls(step, n_steps=len(TMS_STEP_NAMES), session_key="tms_step_idx",
-                                 gate_section=STEP_GATES.get(step), loading=True)
-        st.rerun()
-
     r, sensors = render_data_source_tms(tms_settings, step == STEP_LOAD)
 
     if step == STEP_LOAD:
@@ -94,5 +82,4 @@ def render_tms_page(picker_page) -> None:
     if step == STEP_PRODUCTION:
         tms_production.render(r, sensors)
 
-    render_stepper_controls(step, n_steps=len(TMS_STEP_NAMES), session_key="tms_step_idx",
-                             gate_section=STEP_GATES.get(step), loading=False)
+    render_stepper_controls(step, n_steps=len(TMS_STEP_NAMES), session_key="tms_step_idx", gate_section=STEP_GATES.get(step))

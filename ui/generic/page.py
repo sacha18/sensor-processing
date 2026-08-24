@@ -10,7 +10,7 @@ from __future__ import annotations
 import streamlit as st
 
 from ui.fullscreen import any_fullscreen, inject_chrome_hide_css
-from ui.generic.data_source import LOADING_NAMESPACE, peek_generic_fingerprint, render_data_source
+from ui.generic.data_source import render_data_source
 from ui.generic.nav import STEP_NAMES, render_nav
 from ui.generic.overrides import apply_manual_overrides
 from ui.generic.settings import get_settings, init_settings
@@ -25,7 +25,6 @@ from ui.generic.steps import (
     production,
     regularize as step_regularize,
 )
-from ui.loading import loading_pending
 from ui.stepper import render_stepper_controls
 
 # Step indices, in the same order as STEP_NAMES - named so the dispatch below
@@ -60,17 +59,6 @@ def render_generic_page(picker_page) -> None:
 
     render_sidebar(step)
     settings = get_settings()
-
-    # Priming pass: a new/changed upload needs a run that paints Next as
-    # disabled *before* the heavy parse/pipeline call blocks the script -
-    # see ui.loading for why this can't just be a `disabled=` on the button
-    # rendered after that call. This pass skips the heavy work and the step
-    # content entirely, then reruns itself into the pass that does it.
-    if loading_pending(LOADING_NAMESPACE, peek_generic_fingerprint()):
-        render_stepper_controls(step, n_steps=len(STEP_NAMES), session_key="step_idx",
-                                 gate_section=STEP_GATES.get(step), loading=True)
-        st.rerun()
-
     r, sensors, units = render_data_source(settings, step == STEP_LOAD)
 
     # Manual-validation overrides are applied here, unconditionally, so every step
@@ -96,5 +84,4 @@ def render_generic_page(picker_page) -> None:
     if step == STEP_ANALYSIS:
         analysis.render(r, sensors, settings.smooth_method, settings.smooth_window)
 
-    render_stepper_controls(step, n_steps=len(STEP_NAMES), session_key="step_idx",
-                             gate_section=STEP_GATES.get(step), loading=False)
+    render_stepper_controls(step, n_steps=len(STEP_NAMES), session_key="step_idx", gate_section=STEP_GATES.get(step))
