@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -48,9 +49,22 @@ def _is_numeric_col(col: str) -> bool:
     return col in _NUMERIC_COLS or col.startswith(_NUMERIC_PREFIXES)
 
 
+def _normalize_header(h) -> str:
+    return re.sub(r"[\s_]+", "_", str(h).strip().lower())
+
+
 def _coerce(name: str, df: pd.DataFrame) -> pd.DataFrame:
     cols = _SCHEMAS[name]["columns"]
-    df = df.reindex(columns=cols)
+    # an uploaded file's headers are free text (e.g. "Treatment", "Sensor ID") -
+    # not guaranteed to match this app's own lowercase/underscored column names
+    # byte-for-byte. Match case/whitespace-insensitively and rename onto the
+    # schema's own names before reindexing - a case-sensitive reindex alone
+    # would otherwise silently drop a mismatched column to an all-NaN one
+    # (e.g. a "Treatment" header's data never reaching the "treatment" column,
+    # even though it parsed and was right there).
+    incoming = {_normalize_header(c): c for c in df.columns}
+    rename = {incoming[c]: c for c in cols if c in incoming}
+    df = df.rename(columns=rename).reindex(columns=cols)
     for c in cols:
         if c in _DATE_COLS:
             df[c] = pd.to_datetime(df[c], errors="coerce")
