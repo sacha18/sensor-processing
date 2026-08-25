@@ -19,11 +19,11 @@ import streamlit as st
 
 STEP_NAMES = [
     "Loading", "Deduplication", "Regularization", "Outliers",
-    "Gap filling", "Production dataset", "Analysis",
+    "Gap filling", "Production dataset",
 ]
 STEP_ICONS = [
     ":material/upload_file:", ":material/content_copy:", ":material/grid_on:",
-    ":material/warning:", ":material/timeline:", ":material/dataset:", ":material/insights:",
+    ":material/warning:", ":material/timeline:", ":material/dataset:",
 ]
 
 

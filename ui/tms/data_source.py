@@ -27,6 +27,15 @@ _NO_UPLOAD_FINGERPRINT = ("__none__",)
 LOADING_NAMESPACE = "tms_data_source"
 
 
+def has_cached_upload() -> bool:
+    """Whether a TMS upload has already been parsed this session - lets a
+    page reached outside the normal step flow (e.g. the standalone
+    analysis page) show a targeted "go upload first" message instead of
+    render_data_source_tms's own st.stop(), which assumes its file_uploader
+    widget is visible on the current page."""
+    return _RAW_CACHE_KEY in st.session_state
+
+
 def peek_tms_fingerprint() -> tuple:
     """The fingerprint render_data_source_tms will use this run, without
     rendering anything - Streamlit resolves a widget's current value into

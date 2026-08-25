@@ -8,12 +8,12 @@ from ui.generic.nav import render_nav
 
 TMS_STEP_NAMES = [
     "Loading & continuity", "Metadata", "Initial QC", "Signal correction",
-    "VWC calibration", "Final QC", "Analysis", "Production dataset",
+    "VWC calibration", "Final QC", "Production dataset",
 ]
 TMS_STEP_ICONS = [
     ":material/upload_file:", ":material/map:", ":material/warning:",
     ":material/tune:", ":material/water_drop:", ":material/fact_check:",
-    ":material/insights:", ":material/dataset:",
+    ":material/dataset:",
 ]
 
 

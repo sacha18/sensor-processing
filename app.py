@@ -18,9 +18,11 @@ import logging
 
 import streamlit as st
 
+from ui.generic.analysis_page import render_generic_analysis_page
 from ui.generic.page import render_generic_page
 from ui.picker import render_picker
 from ui.theme import inject_page_css, register_plotly_theme
+from ui.tms.analysis_page import render_tms_analysis_page
 from ui.tms.page import render_tms_page
 
 # Without this, modules' logger.info(...) calls are silently dropped -
@@ -31,11 +33,16 @@ st.set_page_config(page_title="Sensor cleaning pipeline", layout="wide")
 register_plotly_theme()
 inject_page_css()
 
-generic_page = st.Page(lambda: render_generic_page(picker_page), title="Generic pipeline",
+generic_page = st.Page(lambda: render_generic_page(picker_page, generic_analysis_page), title="Generic pipeline",
                         icon=":material/show_chart:", url_path="generic")
-tms_page = st.Page(lambda: render_tms_page(picker_page), title="TOMST TMS-4 (soil)",
+generic_analysis_page = st.Page(lambda: render_generic_analysis_page(picker_page, generic_page),
+                                 title="Generic Analysis", icon=":material/insights:", url_path="generic-analysis")
+tms_page = st.Page(lambda: render_tms_page(picker_page, tms_analysis_page), title="TOMST TMS-4 (soil)",
                     icon=":material/grass:", url_path="tms")
+tms_analysis_page = st.Page(lambda: render_tms_analysis_page(picker_page, tms_page), title="TMS Analysis",
+                             icon=":material/insights:", url_path="tms-analysis")
 picker_page = st.Page(lambda: render_picker(generic_page, tms_page), title="Choose pipeline",
                        url_path="", default=True)
 
-st.navigation([picker_page, generic_page, tms_page], position="hidden").run()
+st.navigation([picker_page, generic_page, generic_analysis_page, tms_page, tms_analysis_page],
+              position="hidden").run()

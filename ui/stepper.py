@@ -29,6 +29,8 @@ instead of overlapping the last bit of chart/table content.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import streamlit as st
 
 from ui.fullscreen import enter_fullscreen, exit_fullscreen, is_fullscreen
@@ -97,3 +99,30 @@ def render_stepper_controls(step: int, n_steps: int, session_key: str, gate_sect
         st.session_state[unlocked_key] = max(st.session_state[unlocked_key], step + 1)
         st.session_state[session_key] = step + 1
         st.rerun()
+
+
+@contextmanager
+def fixed_bottom_right(key: str):
+    """Same fixed bottom-right spot as the stepper's own Next (same offset,
+    so rows line up), for buttons outside the normal step flow - e.g. a
+    page-level download/navigation action that isn't "Next" in a step
+    sequence. Buttons put inside lay out left-to-right."""
+    st.markdown(
+        f"""
+        <style>
+        div[class*="st-key-{key}"] {{
+            position: fixed !important; bottom: calc(1.2rem + 55px); right: 1.5rem; z-index: 999998;
+            width: fit-content !important; background: transparent !important;
+            border: none !important; box-shadow: none !important; padding: 0 !important;
+            display: flex !important; gap: 0.5rem !important;
+        }}
+        div[class*="st-key-{key}"] button {{
+            white-space: nowrap !important; width: fit-content !important;
+            min-height: 42px !important; height: 42px !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(key=key, horizontal=True) as container:
+        yield container

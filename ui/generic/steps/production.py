@@ -1,4 +1,6 @@
-"""Step 7: Production dataset - final series, downloads."""
+"""Step 6 (last): Production dataset - final series, downloads. Analysis
+lives on its own page now (ui.generic.analysis_page), reached from the
+"Analyze" button here rather than being a step in this stepper."""
 from __future__ import annotations
 
 import plotly.graph_objects as go
@@ -6,11 +8,12 @@ import streamlit as st
 
 from ui.charts import add_area_trace, facet_grid, plot
 from ui.generic.data_source import SensorMeta
-from ui.format import to_csv_bytes
+from ui.format import to_csv_bytes, to_csv_bytes_cached
+from ui.stepper import fixed_bottom_right
 from ui.theme import HORIZONTAL_LEGEND
 
 
-def render(r: dict, sensors: SensorMeta) -> None:
+def render(r: dict, sensors: SensorMeta, analysis_page) -> None:
     st.subheader("Production dataset", divider="gray")
     st.write("**All sensors - final series**")
     fig = facet_grid([sensors.label[s] for s in sensors.ids])
@@ -37,8 +40,14 @@ def render(r: dict, sensors: SensorMeta) -> None:
     st.write("Wide format (one column per sensor, ready for analysis):")
     st.dataframe(r["production_wide"], width='stretch', height=300)
 
-    c1, c2 = st.columns(2)
-    c1.download_button("Download (long) CSV", to_csv_bytes(r["production"].set_index("timestamp")),
-                        file_name="sensors_clean_long.csv", mime="text/csv", icon=":material/download:")
-    c2.download_button("Download (wide) CSV", to_csv_bytes(r["production_wide"]),
+    st.download_button("Download (wide) CSV", to_csv_bytes(r["production_wide"]),
                         file_name="sensors_clean_wide.csv", mime="text/csv", icon=":material/download:")
+
+    with fixed_bottom_right("production_next_bar"):
+        if st.button("Analyze", icon=":material/insights:", key="production_analyze", width="content"):
+            st.switch_page(analysis_page)
+        st.download_button(
+            "Download", to_csv_bytes_cached(r["production"].set_index("timestamp")),
+            file_name="sensors_clean_long.csv", mime="text/csv", type="primary",
+            key="production_download", width="content",
+        )

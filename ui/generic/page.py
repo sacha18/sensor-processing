@@ -16,7 +16,6 @@ from ui.generic.overrides import apply_manual_overrides
 from ui.generic.settings import get_settings, init_settings
 from ui.generic.sidebar import render_sidebar
 from ui.generic.steps import (
-    analysis,
     dedupe as step_dedupe,
     gapfill as step_gapfill,
     load as step_load,
@@ -32,7 +31,7 @@ from ui.stepper import render_stepper_controls
 # reads by step, not by position.
 (
     STEP_LOAD, STEP_DEDUPE, STEP_REGULARIZE, STEP_OUTLIERS,
-    STEP_GAPFILL, STEP_PRODUCTION, STEP_ANALYSIS,
+    STEP_GAPFILL, STEP_PRODUCTION,
 ) = range(len(STEP_NAMES))
 
 # step index -> the before/after section (ui.step_validate) that must be
@@ -41,7 +40,7 @@ from ui.stepper import render_stepper_controls
 STEP_GATES = {STEP_OUTLIERS: "outliers", STEP_GAPFILL: "gapfill"}
 
 
-def render_generic_page(picker_page) -> None:
+def render_generic_page(picker_page, analysis_page) -> None:
     init_settings()
 
     if any_fullscreen():
@@ -95,9 +94,7 @@ def render_generic_page(picker_page) -> None:
     if step == STEP_GAPFILL:
         step_gapfill.render(r, sensors)
     if step == STEP_PRODUCTION:
-        production.render(r, sensors)
-    if step == STEP_ANALYSIS:
-        analysis.render(r, sensors, settings.smooth_method, settings.smooth_window)
+        production.render(r, sensors, analysis_page)
 
     render_stepper_controls(step, n_steps=len(STEP_NAMES), session_key="step_idx",
                              gate_section=STEP_GATES.get(step), loading=False)

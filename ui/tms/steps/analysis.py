@@ -1,8 +1,9 @@
-"""Step 7: Analysis - downstream visual QA of the finished production
-dataset (soil moisture + temperature by physical depth, group means over
-individual sensors, daily aggregates, distribution by group). Nothing here
-feeds back into the pipeline - it's read-only reporting on top of the
-already-cleaned `production` table."""
+"""Downstream visual QA of the finished production dataset (soil moisture +
+temperature by physical depth, group means over individual sensors, daily
+aggregates, distribution by group). Reached from its own standalone page
+(ui.tms.analysis_page), not a pipeline step - operates on the already-
+cleaned `production` table alone, nothing here feeds back into the
+pipeline."""
 from __future__ import annotations
 
 import pandas as pd
@@ -11,7 +12,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 import pipeline.tms as TMS
-from ui.charts import facet_grid, plot
+from ui.charts import decimate_groups, facet_grid, plot
 from ui.generic.data_source import SensorMeta
 from ui.format import render_capped_dataframe, to_csv_bytes, to_csv_bytes_cached, to_xlsx_bytes_cached
 from ui.theme import CATEGORICAL_COLORS, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, _rgba
@@ -93,12 +94,31 @@ def _label(v, unit: str = "") -> str:
     return "(unset)" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{v}{unit}"
 
 
+def _group_label_col(df: pd.DataFrame, group_cols: list[str]) -> pd.Series:
+    """One "label" per row combining group_cols (joined with " | " when
+    there's more than one) - not a bare `.astype(str)` + join: pandas can
+    leave a missing value as an actual float('nan') even after astype(str),
+    which breaks str.join and turns into an unhashable/inconsistent lookup
+    key downstream. _label() normalizes each value (including missing) to
+    a real string first."""
+    labeled = df[group_cols].map(_label)
+    return labeled.agg(" | ".join, axis=1) if len(group_cols) > 1 else labeled[group_cols[0]]
+
+
 def _add_individual_lines(fig, df, x_col, y_col, id_cols, colors, dashes, color_col, dash_col, row=None, col=None):
     """One thin, semi-transparent line per id_cols group (e.g. one per
     sensor) - never connects two different sensors together. Layered under
     the thick group-mean lines so both the noise and the signal are visible
     at once, per the field team's own "always show individuals and the
-    mean" rule."""
+    mean" rule.
+
+    Decimated per group first: a full native-resolution multi-sensor,
+    multi-year series can be millions of points, which Plotly has to
+    serialize whole into the message sent to the browser - the group-mean
+    lines (thick, on top) carry the actual signal, these are just visual
+    noise/context underneath, so thinning them out loses nothing that
+    matters."""
+    df = decimate_groups(df, id_cols)
     for keys, sub in df.groupby(id_cols, dropna=False):
         keys = keys if isinstance(keys, tuple) else (keys,)
         by_col = dict(zip(id_cols, keys))
@@ -116,7 +136,15 @@ def _add_group_lines(fig, df, x_col, y_col, colors, dashes, color_col, dash_col,
     """One thick line per (color_col, dash_col) group - the group mean
     layered over _add_individual_lines's per-sensor backdrop. Hover shows n
     (how many sensors/readings contributed) so a mean isn't read with more
-    confidence than its sample size supports."""
+    confidence than its sample size supports.
+
+    Decimated per group first (see _add_individual_lines) - when no real
+    grouping dimension is configured, color_col/dash_col fall back to
+    sensor_id (_pick_color_dash_cols), so a "group" can be just one sensor:
+    without this, that common case's "mean" line is silently the whole
+    native-resolution series again, just as large as the backdrop it sits
+    on top of."""
+    df = decimate_groups(df, [color_col, dash_col])
     color_unit, dash_unit = _unit_for(color_col), _unit_for(dash_col)
     # dash_col == _SINGLE_COL means there's no real second dimension (the
     # sensor_id color fallback) - drop the " - " suffix instead of labeling
@@ -191,13 +219,18 @@ def _temp_chart(temp_long: pd.DataFrame, colors: dict, color_col: str, height_pe
     seen = set()
     for i, z in enumerate(levels, start=1):
         zsub = temp_long[temp_long["z_cm"] == z]
-        for sensor_id, g in zsub.groupby("sensor_id"):
+        # decimated per sensor - see _add_individual_lines; these thin
+        # backdrop lines don't need every native-resolution point, and a
+        # full multi-year/multi-sensor series here can be huge to serialize.
+        for sensor_id, g in decimate_groups(zsub, ["sensor_id"]).groupby("sensor_id"):
             color = colors.get(g[color_col].iloc[0], REFERENCE_LINE_COLOR)
             fig.add_trace(go.Scatter(
                 x=g["timestamp"], y=g["temperature"], mode="lines", connectgaps=False,
                 line=dict(color=_rgba(color, 0.28), width=1), showlegend=False, hoverinfo="skip",
             ), row=i, col=1)
-        gm = TMS.group_mean(zsub, "temperature", [color_col])
+        # same reasoning as _add_group_lines: color_col can fall back to
+        # sensor_id, making a "group" mean just one sensor's full series.
+        gm = decimate_groups(TMS.group_mean(zsub, "temperature", [color_col]), [color_col])
         for cval, gsub in gm.groupby(color_col, dropna=False):
             color = colors.get(cval, REFERENCE_LINE_COLOR)
             fig.add_trace(go.Scatter(
@@ -302,12 +335,16 @@ def _render_exploration(sub: pd.DataFrame) -> None:
                          ["sensor_id"].nunique().reset_index(name="n_sensors"))
             agg = agg.merge(n_sensors, on=group_cols + ["timestamp"])
 
-    group_label_col = agg[group_cols].astype(str).agg(" | ".join, axis=1) if len(group_cols) > 1 \
-        else agg[group_cols[0]].astype(str)
+    group_label_col = _group_label_col(agg, group_cols)
     colors = _color_map(group_label_col)
+    # Native resolution can be millions of rows - decimated for the chart
+    # only (Plotly has to serialize every point into the browser message);
+    # the table/CSV/XLSX export below still uses the full, undecimated agg.
+    plot_df = decimate_groups(agg, group_cols) if freq is None else agg
+    plot_group_label_col = _group_label_col(plot_df, group_cols)
     fig = go.Figure()
     for gval in sorted(group_label_col.unique()):
-        gsub = agg[group_label_col == gval].sort_values("timestamp")
+        gsub = plot_df[plot_group_label_col == gval].sort_values("timestamp")
         hovertemplate = f"{gval}<br>%{{x}}<br>%{{y:.3f}}<br>n=%{{customdata}}<extra></extra>"
         fig.add_trace(go.Scatter(
             x=gsub["timestamp"], y=gsub["mean"], mode="lines", connectgaps=False,
@@ -332,9 +369,7 @@ def _render_exploration(sub: pd.DataFrame) -> None:
                             icon=":material/download:")
 
 
-def render(r: dict, sensors: SensorMeta) -> None:
-    production = r["production"]
-
+def render(production: pd.DataFrame, sensors: SensorMeta) -> None:
     st.subheader("Analysis", divider="gray")
     st.caption("Downstream analysis of the finished production dataset - nothing here feeds back into the pipeline.")
 

@@ -17,7 +17,6 @@ from ui.tms.nav import TMS_STEP_NAMES, render_nav_tms
 from ui.tms.settings import get_tms_settings, init_tms_settings
 from ui.tms.sidebar import render_sidebar_tms
 from ui.tms.steps import (
-    analysis as tms_analysis,
     calibration as tms_calibration,
     correction as tms_correction,
     final_qc as tms_final_qc,
@@ -31,7 +30,7 @@ from ui.tms.steps import (
 # below reads by step, not by position.
 (
     STEP_LOAD, STEP_METADATA, STEP_INITIAL_QC, STEP_CORRECTION,
-    STEP_CALIBRATION, STEP_FINAL_QC, STEP_ANALYSIS, STEP_PRODUCTION,
+    STEP_CALIBRATION, STEP_FINAL_QC, STEP_PRODUCTION,
 ) = range(len(TMS_STEP_NAMES))
 
 # step index -> the before/after section (ui.step_validate) that must be
@@ -44,7 +43,7 @@ STEP_GATES = {
 }
 
 
-def render_tms_page(picker_page) -> None:
+def render_tms_page(picker_page, analysis_page) -> None:
     init_tms_settings()
     init_tms_config()
 
@@ -92,10 +91,8 @@ def render_tms_page(picker_page) -> None:
         tms_calibration.render(r, sensors)
     if step == STEP_FINAL_QC:
         tms_final_qc.render(r, sensors)
-    if step == STEP_ANALYSIS:
-        tms_analysis.render(r, sensors)
     if step == STEP_PRODUCTION:
-        tms_production.render(r, sensors)
+        tms_production.render(r, sensors, analysis_page)
 
     render_stepper_controls(step, n_steps=len(TMS_STEP_NAMES), session_key="tms_step_idx",
                              gate_section=STEP_GATES.get(step), loading=False)
