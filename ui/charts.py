@@ -107,6 +107,39 @@ def run_edges(mask: pd.Series) -> pd.Series:
     return pd.Series(starts | ends, index=mask.index)
 
 
+def flagged_intervals(timestamps: pd.Series, flags: pd.Series) -> list:
+    """(start, end) timestamp pairs for each contiguous run of True in
+    `flags` (aligned to `timestamps`, both already sorted) - turns a
+    per-point boolean flag into the handful of date ranges it actually
+    covers, for shading a chart's background rather than marking every
+    individual flagged point (easy to miss once zoomed out over a
+    multi-day chart, especially for a long field-event exclusion)."""
+    mask = flags.fillna(False).to_numpy()
+    if not mask.any():
+        return []
+    starts = np.flatnonzero(mask & ~np.r_[False, mask[:-1]])
+    ends = np.flatnonzero(mask & ~np.r_[mask[1:], False])
+    ts = pd.DatetimeIndex(timestamps).to_numpy()
+    return list(zip(ts[starts], ts[ends]))
+
+
+def add_flag_shading(fig, timestamps: pd.Series, flags: pd.Series, color: str,
+                      opacity: float = 0.15, row=None, col=None) -> None:
+    """Shades every excluded run in `flags` as a translucent background band
+    (drawn below the traces, so the line stays fully visible on top) - the
+    "this period is marked/cleared" cue for a QC chart, complementing any
+    per-method colored point markers already drawn on it.
+
+    On a make_subplots figure, call this AFTER that row/col's first
+    add_trace - add_vrect(row=, col=) silently drops the shape (no shapes
+    added, no error) if the subplot cell has no trace yet to resolve the
+    axis reference against. Order doesn't matter on a plain go.Figure()
+    (no row/col)."""
+    for start, end in flagged_intervals(timestamps, flags):
+        fig.add_vrect(x0=start, x1=end, fillcolor=color, opacity=opacity,
+                       line_width=0, layer="below", row=row, col=col)
+
+
 def diff_mask(before: pd.Series, after: pd.Series, atol: float = 1e-9, rtol: float = 1e-6) -> pd.Series:
     """True where `after` actually differs from `before` - a changed value, or a
     value that appeared/disappeared (NaN on only one side). Both-NaN is not a

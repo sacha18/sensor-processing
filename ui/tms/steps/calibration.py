@@ -13,8 +13,7 @@ from ui.charts import plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
 from ui.theme import CHANGED_HIGHLIGHT_COLOR, HORIZONTAL_LEGEND
-from ui.tms.config import (delete_row, example_csv, example_json, get_table, merge_uploaded,
-                            parse_optional_datetime, set_table)
+from ui.tms.config import delete_row, example_csv, example_json, get_table, merge_uploaded, set_table
 
 _SECTION = "tms_calibration"
 
@@ -94,28 +93,24 @@ def _render_rules(calibrated: pd.DataFrame, sensors: SensorMeta) -> None:
             "Sensor or group", _sensor_group_options(sensors), index=None, placeholder="*",
             accept_new_options=True, key="tms_calibration_add_sensor",
             help="Blank or \"*\" = every sensor. Pick a loaded sensor id or a metadata Group, or type a new one.")
-        valid_from = c2.text_input("Valid from", placeholder="blank = always", help="e.g. 2025-06-01 or 2025-06-01 14:00")
+        valid_from = c2.datetime_input("Valid from", value=None, format="YYYY-MM-DD", help="Blank = always.")
         coef_values = {}
         coef_cols = st.columns(len(POLY_COEF_COLUMNS))
         for col, c in zip(POLY_COEF_COLUMNS, coef_cols):
             coef_values[col] = c.number_input(col, value=None, format="%.6g", key=f"tms_cal_add_{col}")
         c3, c4 = st.columns(2)
-        valid_to = c3.text_input("Valid to", placeholder="blank = always")
+        valid_to = c3.datetime_input("Valid to", value=None, format="YYYY-MM-DD", help="Blank = always.")
         notes = c4.text_input("Notes")
         if st.form_submit_button("Add rule", icon=":material/add_circle:", type="primary"):
             if coef_values["coef_0"] is None:
                 st.error("coef_0 is required (the constant term - at least a flat calibration needs it).")
             else:
-                vf, vt = parse_optional_datetime(valid_from), parse_optional_datetime(valid_to)
-                if vf is False or vt is False:
-                    st.error("Couldn't parse Valid from/to - try e.g. 2025-06-01 or 2025-06-01 14:00.")
-                else:
-                    new_row = pd.DataFrame([{
-                        "sensor_id": (sensor_id or "").strip() or "*", **coef_values,
-                        "valid_from": vf, "valid_to": vt, "notes": notes.strip() or None,
-                    }])
-                    set_table("calibration", pd.concat([get_table("calibration"), new_row], ignore_index=True))
-                    st.rerun()
+                new_row = pd.DataFrame([{
+                    "sensor_id": (sensor_id or "").strip() or "*", **coef_values,
+                    "valid_from": valid_from, "valid_to": valid_to, "notes": notes.strip() or None,
+                }])
+                set_table("calibration", pd.concat([get_table("calibration"), new_row], ignore_index=True))
+                st.rerun()
 
     table = get_table("calibration")
     if table.empty:

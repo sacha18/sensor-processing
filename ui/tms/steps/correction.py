@@ -11,8 +11,7 @@ from ui.charts import before_after_chart, plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
 from ui.theme import CHANGED_HIGHLIGHT_COLOR
-from ui.tms.config import (delete_row, example_csv, example_json, get_table, merge_uploaded,
-                            parse_optional_datetime, set_table)
+from ui.tms.config import delete_row, example_csv, example_json, get_table, merge_uploaded, set_table
 
 _SECTION = "tms_correction"
 
@@ -98,24 +97,20 @@ def _render_rules(corrected: pd.DataFrame, sensors: SensorMeta) -> None:
         factor_a = c3.number_input("a", value=None, format="%.6g")
         factor_b = c4.number_input("b", value=None, format="%.6g", help="Two-factor only.")
         c5, c6, c7 = st.columns(3)
-        valid_from = c5.text_input("Valid from", placeholder="blank = always", help="e.g. 2025-06-01 or 2025-06-01 14:00")
-        valid_to = c6.text_input("Valid to", placeholder="blank = always")
+        valid_from = c5.datetime_input("Valid from", value=None, format="YYYY-MM-DD", help="Blank = always.")
+        valid_to = c6.datetime_input("Valid to", value=None, format="YYYY-MM-DD", help="Blank = always.")
         notes = c7.text_input("Notes")
         if st.form_submit_button("Add rule", icon=":material/add_circle:", type="primary"):
             if factor_a is None:
                 st.error("\"a\" is required.")
             else:
-                vf, vt = parse_optional_datetime(valid_from), parse_optional_datetime(valid_to)
-                if vf is False or vt is False:
-                    st.error("Couldn't parse Valid from/to - try e.g. 2025-06-01 or 2025-06-01 14:00.")
-                else:
-                    new_row = pd.DataFrame([{
-                        "sensor_id": (sensor_id or "").strip() or "*", "correction_type": correction_type,
-                        "factor_a": factor_a, "factor_b": factor_b, "valid_from": vf, "valid_to": vt,
-                        "notes": notes.strip() or None,
-                    }])
-                    set_table("correction", pd.concat([get_table("correction"), new_row], ignore_index=True))
-                    st.rerun()
+                new_row = pd.DataFrame([{
+                    "sensor_id": (sensor_id or "").strip() or "*", "correction_type": correction_type,
+                    "factor_a": factor_a, "factor_b": factor_b, "valid_from": valid_from, "valid_to": valid_to,
+                    "notes": notes.strip() or None,
+                }])
+                set_table("correction", pd.concat([get_table("correction"), new_row], ignore_index=True))
+                st.rerun()
 
     table = get_table("correction")
     if table.empty:

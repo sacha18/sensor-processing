@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-_DATE_COLS = {"install_start", "install_end", "valid_from", "valid_to", "start", "end"}
+_DATE_COLS = {"install_start", "install_end", "valid_from", "valid_to", "start", "end", "created_at"}
 _NUMERIC_PREFIXES = ("coef_",)
 _NUMERIC_COLS = {"factor_a", "factor_b", "depth_cm"}
 
@@ -39,8 +39,14 @@ _SCHEMAS = {
     "field_events": {
         "session_key": "tms_field_events_df",
         # sensor_id/treatment blank or "*"/"all" = wildcard (applies to every
-        # sensor, or every sensor of that treatment) - see pipeline/tms/events.py
-        "columns": ["sensor_id", "treatment", "channel", "start", "end", "event_type", "note"],
+        # sensor, or every sensor of that treatment) - see pipeline/tms/events.py.
+        # edit_id/created_by/created_at are only populated for a row added through
+        # the manual QC editor (ui/tms/steps/final_qc.py) - a bulk CSV/JSON upload
+        # or a direct data_editor row leaves them blank. edit_id groups the one or
+        # more rows a single "mark interval invalid" action produced (e.g. several
+        # channels at once) so they can be reviewed/reverted together.
+        "columns": ["sensor_id", "treatment", "channel", "start", "end", "event_type", "note",
+                    "edit_id", "created_by", "created_at"],
     },
 }
 
@@ -148,22 +154,12 @@ def parse_uploaded(uploaded_file, skiprows: int = 0) -> pd.DataFrame:
     return pd.read_csv(io.BytesIO(content), skiprows=skiprows)
 
 
-def delete_row(name: str, index: int) -> None:
-    """Removes one row (by its position in get_table(name)) - used by the
-    per-row Delete button next to each rule in the "add a rule" forms."""
+def delete_row(name: str, index) -> None:
+    """Removes one or more rows (by position in get_table(name), a single
+    index or a list) - used by the per-row Delete button next to each rule
+    in the "add a rule" forms, and by the manual QC editor's "Revert" button
+    (a list, to drop every row one "mark invalid" action produced at once)."""
     set_table(name, get_table(name).drop(index=index))
-
-
-def parse_optional_datetime(text: str):
-    """Parses a free-text date/datetime field from an "add a rule" form.
-    Blank -> None (matches every time, same as a blank cell in the old
-    data_editor). Unparseable -> False, a sentinel the caller checks for to
-    show an inline error instead of silently dropping the value."""
-    text = (text or "").strip()
-    if not text:
-        return None
-    ts = pd.to_datetime(text, errors="coerce")
-    return False if pd.isna(ts) else ts
 
 
 def merge_uploaded(name: str, uploaded_file, skiprows: int = 0) -> int:
