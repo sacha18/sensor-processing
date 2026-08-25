@@ -41,6 +41,37 @@ def plot(fig):
     st.plotly_chart(fig, width='stretch', config={"scrollZoom": False})
 
 
+MAX_POINTS_PER_TRACE = 3000
+
+
+def decimate(df: pd.DataFrame, max_points: int = MAX_POINTS_PER_TRACE) -> pd.DataFrame:
+    """Evenly thins df to at most max_points rows (stride sampling - every
+    Nth row, not a random/head sample, so the shape over time is preserved)
+    - a full native-resolution multi-year series can be millions of rows,
+    and Plotly has to serialize every point of a trace into the message
+    sent to the browser, which can blow past Streamlit's ~200MB message-size
+    limit long before the browser would even struggle to render it. Meant
+    for a per-sensor/backdrop line shown for visual context, not for a
+    group mean or any other trace whose exact values matter - call it per
+    group (e.g. per sensor) so a small group isn't emptied out by a large
+    one elsewhere in the same figure."""
+    n = len(df)
+    if n <= max_points:
+        return df
+    step = -(-n // max_points)  # ceil division
+    return df.iloc[::step]
+
+
+def decimate_groups(df: pd.DataFrame, group_cols: list[str], max_points: int = MAX_POINTS_PER_TRACE) -> pd.DataFrame:
+    """decimate(), applied independently within each group_cols combination -
+    see decimate(). Direct groupby iteration + concat, not .groupby().apply()
+    - apply() excludes the grouping column(s) from what it hands to the
+    function, silently dropping them from the result."""
+    if df.empty:
+        return df
+    return pd.concat([decimate(g, max_points) for _, g in df.groupby(group_cols, dropna=False)])
+
+
 def facet_grid(titles):
     """Vertically stacked, x-linked subplot grid, one row per title - the
     layout every "all sensors" chart in this app shares."""

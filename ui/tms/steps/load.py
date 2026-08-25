@@ -6,7 +6,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
-from ui.charts import plot
+from ui.charts import decimate, plot
 from ui.generic.data_source import SensorMeta
 from ui.format import render_capped_dataframe, to_csv_bytes, to_csv_bytes_cached
 from ui.theme import COLORS, HORIZONTAL_LEGEND
@@ -62,10 +62,14 @@ def render(r: dict, sensors: SensorMeta) -> None:
     fig = go.Figure()
     for i, s in enumerate(sensors.ids):
         sub = merged[merged["sensor_id"] == s].sort_values("timestamp")
-        # Scattergl (WebGL), not Scatter (SVG) - a large multi-hundred-file
-        # upload can put tens of millions of points on this chart across all
-        # sensors combined, which an SVG-based trace renders as one DOM
-        # element per marker and chokes the browser on.
+        # Scattergl (WebGL) keeps the browser from choking on tens of
+        # millions of points across all sensors, but Plotly still has to
+        # serialize every one of them into the message sent to the browser -
+        # decimate() caps that at MAX_POINTS_PER_TRACE per sensor (this
+        # chart is just showing coverage/gaps, not exact reading times, so
+        # thinning it out loses nothing that matters - the gap report table
+        # above has the precise gap boundaries).
+        sub = decimate(sub)
         fig.add_trace(go.Scattergl(x=sub["timestamp"], y=[sensors.label[s]] * len(sub), mode="markers",
                                     marker=dict(symbol="line-ns", line=dict(width=2, color=COLORS["observed"]), size=9),
                                     name="observed", legendgroup="observed", showlegend=(i == 0), hoverinfo="x"))
