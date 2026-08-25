@@ -46,6 +46,8 @@ _UPLOAD_KEY_BASE = "data_source_uploaded_files"
 _CHANNELS_KEY_BASE = "data_source_channels"
 _UNITS_KEY_BASE = "data_source_units_file"
 _RELOAD_VERSION_KEY = "data_source_reload_version"
+_RAW_CACHE_KEY_BASE = "data_source_raw_long_cache"
+_RAW_CACHE_FP_KEY_BASE = "data_source_raw_long_cache_fp"
 LOADING_NAMESPACE = "generic_data_source"
 
 
@@ -64,10 +66,22 @@ def peek_generic_fingerprint() -> tuple:
     session_state before the script body runs, so this is accurate even
     before st.file_uploader(key=upload_key) is (re-)called this pass. Lets
     ui.generic.page decide, before doing any rendering, whether this run
-    needs the loading-gate priming pass (see ui.loading)."""
+    needs the loading-gate priming pass (see ui.loading).
+
+    Falls back to the last-cached-upload fingerprint (not straight to
+    "__sample__") when the file_uploader's own session_state value is
+    empty - Streamlit doesn't reliably keep a file_uploader's attached
+    files across many reruns where it isn't the widget being interacted
+    with (e.g. on the standalone analysis page, or uploading something in
+    a *different* file_uploader elsewhere in the app), so this is the
+    difference between "no file uploaded" and "already uploaded and parsed
+    earlier this session"."""
     uploaded_files = st.session_state.get(_versioned(_UPLOAD_KEY_BASE))
     if uploaded_files:
         return uploads_fingerprint(uploaded_files)
+    cached_fp = st.session_state.get(_versioned(_RAW_CACHE_FP_KEY_BASE))
+    if cached_fp is not None:
+        return cached_fp
     return ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
 
 
@@ -86,6 +100,8 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
     upload_key = _versioned(_UPLOAD_KEY_BASE)
     channels_key = _versioned(_CHANNELS_KEY_BASE)
     units_key = _versioned(_UNITS_KEY_BASE)
+    raw_cache_key = _versioned(_RAW_CACHE_KEY_BASE)
+    raw_cache_fp_key = _versioned(_RAW_CACHE_FP_KEY_BASE)
 
     if show_ui:
         st.subheader("Data source", divider="gray")
@@ -111,7 +127,8 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
     if uploaded_files:
         fingerprint = uploads_fingerprint(uploaded_files)
     else:
-        fingerprint = ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
+        fingerprint = st.session_state.get(raw_cache_fp_key) or \
+            ("__sample__", st.session_state.get(_RELOAD_VERSION_KEY, 0))
 
     if skip_heavy:
         return None, None, None
@@ -128,6 +145,15 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
         except Exception as e:
             st.error(f"Could not parse the uploaded files: {e}")
             st.stop()
+        # Cached independently of the widget: Streamlit doesn't reliably
+        # keep a file_uploader's attached files across many reruns spent on
+        # other steps/pages (see peek_generic_fingerprint) - once parsed,
+        # later runs reuse this instead of silently falling back to the
+        # sample dataset.
+        st.session_state[raw_cache_key] = raw_long
+        st.session_state[raw_cache_fp_key] = fingerprint
+    elif raw_cache_key in st.session_state:
+        raw_long = st.session_state[raw_cache_key]
     else:
         try:
             data_dir = P.resolve_data_dir()
