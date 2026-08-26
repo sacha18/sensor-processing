@@ -8,10 +8,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from pipeline.tms.config import SIGNAL_CHANNELS
-from ui.charts import add_flag_shading, facet_grid, plot
+from ui.charts import facet_grid, plot
 from ui.generic.data_source import SensorMeta
-from ui.theme import (CHANGED_HIGHLIGHT_COLOR, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, TMS_QC_COLORS,
-                       TMS_QC_LABELS, TMS_QC_PRIORITY)
+from ui.theme import HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, TMS_QC_COLORS, TMS_QC_LABELS, TMS_QC_PRIORITY
 from ui.tms.config import delete_row, get_table, merge_uploaded, set_table
 
 CHANNEL_TITLES = {"t1": "T1", "t2": "T2", "t3": "T3", "signal": "Signal (raw)"}
@@ -26,8 +25,17 @@ def render(r: dict, sensors: SensorMeta) -> None:
     for c, ch in zip(cols, SIGNAL_CHANNELS):
         c.metric(CHANNEL_TITLES[ch], int(qc[f"is_qc_{ch}"].sum()))
 
-    st.write("**Detail view** - shaded red bands mark a period excluded for that channel (any method - "
-             "automatic QC, a known field event below, or a manual edit on the Final QC step).")
+    _render_detail(qc, sensors)
+    _render_field_events(sensors)
+
+
+@st.fragment
+def _render_detail(qc: pd.DataFrame, sensors: SensorMeta) -> None:
+    """Isolated as a fragment - without it, changing Sensor triggers a
+    full-page rerun (recomputing the Known field events section below too),
+    since Streamlit reruns the whole script on any widget interaction by
+    default. A fragment reruns just this function."""
+    st.write("**Detail view**")
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s])
     sub = qc[qc["sensor_id"] == sensor].sort_values("timestamp").copy()
 
@@ -40,7 +48,6 @@ def render(r: dict, sensors: SensorMeta) -> None:
         # cell has no trace in it yet to resolve the axis reference against.
         fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[col], mode="lines", connectgaps=True,
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=1)
-        add_flag_shading(fig, sub["timestamp"], sub[f"is_qc_{ch}"], CHANGED_HIGHLIGHT_COLOR, row=i, col=1)
 
         method_col = f"_method_{ch}"
         sub[method_col] = None
@@ -60,8 +67,6 @@ def render(r: dict, sensors: SensorMeta) -> None:
                 seen_methods.add(m)
     fig.update_layout(height=200 * len(SIGNAL_CHANNELS), margin=dict(t=70), legend=HORIZONTAL_LEGEND)
     plot(fig)
-
-    _render_field_events(sensors)
 
 
 def _clean(v, default=""):

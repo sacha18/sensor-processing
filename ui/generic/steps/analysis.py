@@ -105,6 +105,26 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
                        legend={**HORIZONTAL_LEGEND, "y": 1.08})
     plot(fig)
 
+    _render_aggregation(r, sensors)
+
+    st.subheader(f":material/show_chart: Smoothing ({smooth_method}, window={smooth_window} steps)", divider="gray")
+    st.caption("Method/window in the sidebar.")
+
+    st.write("**All sensors - smoothed**")
+    fig = facet_grid([sensors.label[s] for s in sensors.ids])
+    for i, s in enumerate(sensors.ids, start=1):
+        sub = r["smoothed_wide"][s]
+        add_area_trace(fig, sub.index, sub.values, sensors.color[s], row=i, col=1)
+    fig.update_layout(height=200 * len(sensors.ids), margin=dict(t=40))
+    plot(fig)
+
+
+@st.fragment
+def _render_aggregation(r: dict, sensors: SensorMeta) -> None:
+    """Isolated as a fragment - without it, changing the aggregation period/
+    sensors/statistics triggers a full-page rerun (recomputing every other
+    chart on this step), since Streamlit reruns the whole script on any
+    widget interaction by default. A fragment reruns just this function."""
     st.subheader(":material/bar_chart: Aggregation - interactive overlay", divider="gray")
 
     a1, a2, a3 = st.columns([1, 2, 2])
@@ -145,14 +165,3 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
     st.download_button("Download aggregated CSV", to_csv_bytes(analysis_agg, index=False),
                         file_name=f"sensors_agg_{ANALYSIS_AGG_OPTIONS[analysis_freq_label]}.csv",
                         mime="text/csv", icon=":material/download:")
-
-    st.subheader(f":material/show_chart: Smoothing ({smooth_method}, window={smooth_window} steps)", divider="gray")
-    st.caption("Method/window in the sidebar.")
-
-    st.write("**All sensors - smoothed**")
-    fig = facet_grid([sensors.label[s] for s in sensors.ids])
-    for i, s in enumerate(sensors.ids, start=1):
-        sub = r["smoothed_wide"][s]
-        add_area_trace(fig, sub.index, sub.values, sensors.color[s], row=i, col=1)
-    fig.update_layout(height=200 * len(sensors.ids), margin=dict(t=40))
-    plot(fig)

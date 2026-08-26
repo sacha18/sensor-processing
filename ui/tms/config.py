@@ -162,11 +162,61 @@ def delete_row(name: str, index) -> None:
     set_table(name, get_table(name).drop(index=index))
 
 
-def merge_uploaded(name: str, uploaded_file, skiprows: int = 0) -> int:
-    """Parses an uploaded CSV/JSON/XLSX and appends its rows to the table
-    (upload prefills, subsequent st.data_editor edits layer on top). Returns
-    the number of rows added."""
-    incoming = _coerce(name, parse_uploaded(uploaded_file, skiprows))
+def merge_rows(name: str, incoming: pd.DataFrame) -> int:
+    """Appends already-parsed rows to the table (upload prefills, subsequent
+    st.data_editor edits layer on top). Returns the number of rows added."""
+    incoming = _coerce(name, incoming)
     merged = pd.concat([get_table(name), incoming], ignore_index=True).drop_duplicates()
     set_table(name, merged)
     return len(incoming)
+
+
+def guess_column_mapping(name: str, df: pd.DataFrame) -> dict[str, str]:
+    """Best-effort default mapping from each of `name`'s schema columns to a
+    column in `df`, using the same case/whitespace-insensitive header match
+    _coerce falls back to - a starting point for the explicit column-mapping
+    selectors in the UI, not a substitute for them (an upload's headers are
+    free text and won't always line up, e.g. "Depth of installation [cm]" vs
+    "depth_cm")."""
+    incoming = {_normalize_header(c): c for c in df.columns}
+    return {c: incoming[c] for c in _SCHEMAS[name]["columns"] if c in incoming}
+
+
+def merge_by_sensor(name: str, incoming: pd.DataFrame) -> tuple[int, int]:
+    """Joins incoming rows onto the existing table by sensor_id, instead of
+    appending: a sensor that already has exactly one row (e.g. seeded from
+    the loaded raw data) gets that row's columns filled in from the incoming
+    non-blank values, rather than gaining a second, mostly-duplicate row. A
+    sensor with zero or more than one existing row is ambiguous to update
+    unambiguously, so it's appended instead. Returns (rows appended, rows
+    updated)."""
+    incoming = _coerce(name, incoming)
+    current = get_table(name).copy()
+    if current.empty or "sensor_id" not in current.columns:
+        set_table(name, pd.concat([current, incoming], ignore_index=True))
+        return len(incoming), 0
+
+    counts = current["sensor_id"].value_counts()
+    updated = 0
+    to_append = []
+    for _, row in incoming.iterrows():
+        sid = row["sensor_id"]
+        if counts.get(sid) == 1:
+            idx = current.index[current["sensor_id"] == sid][0]
+            for col, val in row.items():
+                if col == "sensor_id" or pd.isna(val):
+                    continue
+                current.at[idx, col] = val
+            updated += 1
+        else:
+            to_append.append(row)
+    if to_append:
+        current = pd.concat([current, pd.DataFrame(to_append)], ignore_index=True)
+    set_table(name, current)
+    return len(to_append), updated
+
+
+def merge_uploaded(name: str, uploaded_file, skiprows: int = 0) -> int:
+    """Parses an uploaded CSV/JSON/XLSX and appends its rows to the table.
+    Returns the number of rows added."""
+    return merge_rows(name, parse_uploaded(uploaded_file, skiprows))

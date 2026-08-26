@@ -20,22 +20,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from ui.charts import add_flag_shading, decimate, diff_mask, facet_grid, facet_grid_before_after, plot, run_edges
+from ui.charts import decimate, diff_mask, facet_grid, facet_grid_before_after, plot, run_edges
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
-from ui.theme import (CHANGED_HIGHLIGHT_COLOR, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, TMS_FINAL_QC_COLORS,
-                       TMS_FINAL_QC_LABELS, TMS_FINAL_QC_PRIORITY)
+from ui.theme import HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, TMS_FINAL_QC_COLORS, TMS_FINAL_QC_LABELS, TMS_FINAL_QC_PRIORITY
 from ui.tms.config import delete_row, get_table, set_table
 
 PANELS = ["Corrected Signal", "VWC", "T1", "T2", "T3"]
 VALUE_COLS = ["signal_corrected", "vwc", "t1_raw", "t2_raw", "t3_raw"]
 FLAGGABLE_COLS = {"signal_corrected", "vwc"}  # only the two derived-cross-channel series carry method markers
-# background-shading flag per panel - Corrected Signal/VWC are excluded by final
-# QC's own flag; T1/T2/T3 are never touched by final QC (see render()'s comment
-# below) but are still shaded by their own upstream Initial QC flag, so "this
-# channel was already excluded before final QC" is visible on this chart too.
-PANEL_FLAG_COLS = {"signal_corrected": "is_final_qc", "vwc": "is_final_qc",
-                    "t1_raw": "is_qc_t1", "t2_raw": "is_qc_t2", "t3_raw": "is_qc_t3"}
 _SECTION = "tms_final_qc"
 
 # Interactive inspection includes raw Signal alongside the corrected/derived
@@ -43,7 +36,6 @@ _SECTION = "tms_final_qc"
 # value can be checked straight against the raw reading it came from.
 INSPECT_PANELS = ["Raw Signal", "Corrected Signal", "VWC", "T1", "T2", "T3"]
 INSPECT_COLS = ["signal_raw", "signal_corrected", "vwc", "t1_raw", "t2_raw", "t3_raw"]
-INSPECT_FLAG_COLS = ["is_qc_signal", "is_final_qc", "is_final_qc", "is_qc_t1", "is_qc_t2", "is_qc_t3"]
 
 # channel code (written straight to the field_events table) -> readable label.
 # "all" is what "whole sensor" means in practice: field_event_flags is folded
@@ -66,6 +58,19 @@ def render(r: dict, sensors: SensorMeta) -> None:
         for c, m in zip(cols[1:], TMS_FINAL_QC_PRIORITY):
             c.metric(TMS_FINAL_QC_LABELS[m], int(final[f"is_final_qc_{m}"].sum()))
 
+    _render_detail(final, sensors)
+
+    if not fullscreen:
+        _render_inspection(final, sensors)
+        _render_manual_qc(final, sensors)
+
+
+@st.fragment
+def _render_detail(final: pd.DataFrame, sensors: SensorMeta) -> None:
+    """Isolated as a fragment - without it, changing Sensor triggers a
+    full-page rerun (recomputing Interactive inspection and Manual QC
+    editing below too), since Streamlit reruns the whole script on any
+    widget interaction by default. A fragment reruns just this function."""
     st.write("**Detail view - corrected Signal, VWC, T1/T2/T3 together**")
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s])
     sub = final[final["sensor_id"] == sensor].sort_values("timestamp").copy()
@@ -85,16 +90,11 @@ def render(r: dict, sensors: SensorMeta) -> None:
         after_col = f"{col}_final" if col in FLAGGABLE_COLS else col
         changed = diff_mask(sub[col], sub[after_col]) if col in FLAGGABLE_COLS else None
 
-        # shading must follow each panel's first trace - plotly's
-        # add_vrect(row=, col=) silently drops the shape otherwise (no axis
-        # reference to resolve it against yet).
         fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[col], mode="lines", connectgaps=True,
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=1)
         fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[after_col], mode="lines",
                                   connectgaps=(col not in FLAGGABLE_COLS),
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=2)
-        add_flag_shading(fig, sub["timestamp"], sub[PANEL_FLAG_COLS[col]], CHANGED_HIGHLIGHT_COLOR, row=i, col=1)
-        add_flag_shading(fig, sub["timestamp"], sub[PANEL_FLAG_COLS[col]], CHANGED_HIGHLIGHT_COLOR, row=i, col=2)
         if changed is None or not changed.any():
             continue
 
@@ -113,17 +113,12 @@ def render(r: dict, sensors: SensorMeta) -> None:
     fig.update_layout(height=200 * len(PANELS), margin=dict(t=90), legend=HORIZONTAL_LEGEND)
     plot(fig)
 
-    if not fullscreen:
-        _render_inspection(final, sensors)
-        _render_manual_qc(final, sensors)
 
-
+@st.fragment
 def _render_inspection(final: pd.DataFrame, sensors: SensorMeta) -> None:
     st.subheader("Interactive inspection", divider="gray")
     st.caption("Compare one or more sensors side by side - raw Signal, corrected Signal/VWC and T1/T2/T3 all "
-               "share the same time window. Drag the range slider under the bottom panel to zoom into a stretch. "
-               "Shaded red bands mark a period excluded for that channel - by an automatic QC method, a known "
-               "field event, or a manual edit below - regardless of which one did it.")
+               "share the same time window. Drag the range slider under the bottom panel to zoom into a stretch.")
     selected = st.multiselect("Sensor(s)", sensors.ids, default=sensors.ids[:1],
                                format_func=lambda s: sensors.label[s], key="tms_inspect_sensors")
     if not selected:
@@ -134,14 +129,10 @@ def _render_inspection(final: pd.DataFrame, sensors: SensorMeta) -> None:
     for sid in selected:
         sub = decimate(final[final["sensor_id"] == sid].sort_values("timestamp"))
         color = sensors.color[sid]
-        for i, (col, flag_col) in enumerate(zip(INSPECT_COLS, INSPECT_FLAG_COLS), start=1):
-            # shading must follow this row/col's first trace - plotly's
-            # add_vrect(row=, col=) silently drops the shape otherwise (no
-            # axis reference to resolve it against yet).
+        for i, col in enumerate(INSPECT_COLS, start=1):
             fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[col], mode="lines", connectgaps=True,
                                       line=dict(color=color), name=sensors.label[sid], legendgroup=sid,
                                       showlegend=(i == 1)), row=i, col=1)
-            add_flag_shading(fig, sub["timestamp"], sub[flag_col], CHANGED_HIGHLIGHT_COLOR, row=i, col=1)
     fig.update_xaxes(rangeslider=dict(visible=True), row=len(INSPECT_PANELS), col=1)
     fig.update_layout(height=190 * len(INSPECT_PANELS) + 60, margin=dict(t=70), legend=HORIZONTAL_LEGEND)
     plot(fig)
@@ -155,13 +146,8 @@ def _selection_chart(sub: pd.DataFrame, sensor: str, sensors: SensorMeta):
     the form is the source of truth, this is just a shortcut into it). A
     range slider gives the same zoom/inspect ability as the read-only charts
     above; it works independently of dragmode, so both stay usable together.
-    Already-excluded periods (from any source - automatic QC, a known field
-    event, an earlier manual edit) are shaded red, so submitting the form
-    below and seeing a new red band appear here is the direct confirmation
-    the edit actually took effect.
     """
     fig = go.Figure()
-    add_flag_shading(fig, sub["timestamp"], sub["is_final_qc"], CHANGED_HIGHLIGHT_COLOR)
     fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub["vwc"], mode="lines", connectgaps=True,
                               line=dict(color=sensors.color[sensor]), name="VWC", showlegend=False))
     fig.update_layout(height=280, margin=dict(t=30), dragmode="select",
@@ -193,6 +179,7 @@ def _edit_summary(rows: pd.DataFrame) -> str:
             f"by {first['created_by']} at {first['created_at']}")
 
 
+@st.fragment
 def _render_manual_qc(final: pd.DataFrame, sensors: SensorMeta) -> None:
     st.subheader("Manual QC editing", divider="gray")
     st.caption("Drag a box across the chart below to pick a time interval (or pick one directly below), pick "
