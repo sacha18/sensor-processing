@@ -4,7 +4,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
-from ui.charts import plot
+from ui.charts import decimate, plot
 from ui.generic.data_source import SensorMeta
 from ui.theme import COLORS, HORIZONTAL_LEGEND
 
@@ -28,7 +28,10 @@ def render(r: dict, step_min: int, sensors: SensorMeta) -> None:
                "outside that sensor's deployment window (not a gap).")
     fig = go.Figure()
     for i, s in enumerate(sensors.ids):
-        sub = reg[reg["sensor_id"] == s]
+        # matches ui/tms/steps/load.py's equivalent "per-sensor timeline"
+        # chart - this is just showing coverage/gaps, not exact reading
+        # times, so decimate() loses nothing that matters here.
+        sub = decimate(reg[reg["sensor_id"] == s])
         observed = sub[sub["value_raw"].notna()]
         missing = sub[sub["value_raw"].isna()]
         fig.add_trace(go.Scatter(x=observed["timestamp"], y=[sensors.label[s]] * len(observed), mode="markers",

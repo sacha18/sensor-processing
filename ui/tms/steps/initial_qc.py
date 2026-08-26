@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from pipeline.tms.config import SIGNAL_CHANNELS
-from ui.charts import facet_grid, plot
+from ui.charts import decimate, facet_grid, plot
 from ui.generic.data_source import SensorMeta
 from ui.theme import HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, TMS_QC_COLORS, TMS_QC_LABELS, TMS_QC_PRIORITY
 from ui.tms.config import delete_row, get_table, merge_uploaded, set_table
@@ -46,7 +46,11 @@ def _render_detail(qc: pd.DataFrame, sensors: SensorMeta) -> None:
         # shading must be added after this row/col's first trace - plotly's
         # add_vrect(row=, col=) silently drops the shape if that subplot
         # cell has no trace in it yet to resolve the axis reference against.
-        fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[col], mode="lines", connectgaps=True,
+        # decimated only for the line trace - the per-point method markers
+        # below still need the full-resolution `sub` to flag every point
+        # that matched, not a stride-sampled approximation of it.
+        line_sub = decimate(sub)
+        fig.add_trace(go.Scatter(x=line_sub["timestamp"], y=line_sub[col], mode="lines", connectgaps=True,
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=1)
 
         method_col = f"_method_{ch}"

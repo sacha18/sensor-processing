@@ -12,8 +12,9 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
-from ui.charts import facet_grid, facet_grid_before_after, plot
+from ui.charts import decimate, facet_grid, facet_grid_before_after, plot
 from ui.fullscreen import is_fullscreen
+from ui.format import render_capped_dataframe
 from ui.generic.data_source import SensorMeta
 from ui.theme import HORIZONTAL_LEGEND, METHOD_COLORS, METHOD_LABELS, METHOD_PRIORITY, REFERENCE_LINE_COLOR
 
@@ -42,7 +43,7 @@ def render(r: dict, sensors: SensorMeta, use_donor_regression: bool) -> None:
             c.metric(METHOD_LABELS[m], int(qc[f"is_outlier_{m}"].sum()))
 
         if len(out_rows):
-            st.dataframe(out_rows[["sensor_id", "timestamp", "value_raw", "outlier_method"]], width='stretch')
+            render_capped_dataframe(out_rows[["sensor_id", "timestamp", "value_raw", "outlier_method"]], width='stretch')
 
         healed = out_rows.merge(r["production"][["sensor_id", "timestamp", "fill_method"]],
                                  on=["sensor_id", "timestamp"], how="left")
@@ -61,7 +62,11 @@ def render(r: dict, sensors: SensorMeta, use_donor_regression: bool) -> None:
         seen_methods = set()
         for i, s in enumerate(sensors.ids, start=1):
             sub = qc[qc["sensor_id"] == s].sort_values("timestamp")
-            fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub["value_raw"], mode="lines", connectgaps=True,
+            # decimated only for the line trace - the per-point method
+            # markers below still need the full-resolution `sub` to flag
+            # every matching point, not a stride-sampled approximation.
+            line_sub = decimate(sub)
+            fig.add_trace(go.Scatter(x=line_sub["timestamp"], y=line_sub["value_raw"], mode="lines", connectgaps=True,
                                       line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=1)
             for m in METHOD_PRIORITY:
                 out = sub[sub["outlier_method"] == m]
@@ -81,7 +86,7 @@ def render(r: dict, sensors: SensorMeta, use_donor_regression: bool) -> None:
     st.write("**Before / after - raw vs. outliers removed**")
     fig = facet_grid_before_after([sensors.label[s] for s in sensors.ids])
     for i, s in enumerate(sensors.ids, start=1):
-        sub = qc[qc["sensor_id"] == s].sort_values("timestamp")
+        sub = decimate(qc[qc["sensor_id"] == s].sort_values("timestamp"))
         fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub["value_raw"], mode="lines", connectgaps=True,
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=1)
         fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub["value_qc"], mode="lines",

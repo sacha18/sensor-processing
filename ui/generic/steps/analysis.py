@@ -8,7 +8,7 @@ from plotly.subplots import make_subplots
 from scipy.cluster.hierarchy import dendrogram
 
 import pipeline.generic as P
-from ui.charts import add_area_trace, corr_heatmap, facet_grid, plot
+from ui.charts import add_area_trace, corr_heatmap, decimate, facet_grid, plot
 from ui.generic.data_source import SensorMeta
 from ui.format import to_csv_bytes
 from ui.theme import ECHARTS_COLORWAY, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR, _rgba
@@ -76,8 +76,8 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
     st.write("**All sensors - raw vs cleaned**")
     fig = facet_grid([sensors.label[s] for s in sensors.ids])
     for i, s in enumerate(sensors.ids, start=1):
-        raw_sub = r["reg_long"][r["reg_long"]["sensor_id"] == s].sort_values("timestamp")
-        clean_sub = r["production_wide"][s]
+        raw_sub = decimate(r["reg_long"][r["reg_long"]["sensor_id"] == s].sort_values("timestamp"))
+        clean_sub = decimate(r["production_wide"][s])
         # raw drawn wider + dashed, cleaned drawn on top thinner + solid - so raw still
         # peeks out as a dashed "halo" even where the two lines are pixel-identical
         fig.add_trace(go.Scatter(x=raw_sub["timestamp"], y=raw_sub["value_raw"], mode="lines",
@@ -93,8 +93,8 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
     st.write("**All sensors - distribution shift**")
     fig = make_subplots(rows=1, cols=len(sensors.ids), subplot_titles=[sensors.label[s] for s in sensors.ids])
     for i, s in enumerate(sensors.ids, start=1):
-        raw_vals = r["reg_long"].loc[r["reg_long"]["sensor_id"] == s, "value_raw"].dropna()
-        clean_vals = r["production_wide"][s].dropna()
+        raw_vals = decimate(r["reg_long"].loc[r["reg_long"]["sensor_id"] == s, "value_raw"].dropna())
+        clean_vals = decimate(r["production_wide"][s].dropna())
         fig.add_trace(go.Box(y=raw_vals, name="raw", fillcolor=_rgba(REFERENCE_LINE_COLOR, 0.25),
                               line=dict(color=REFERENCE_LINE_COLOR), marker=dict(color=REFERENCE_LINE_COLOR),
                               legendgroup="raw", showlegend=(i == 1)), row=1, col=i)
@@ -113,7 +113,7 @@ def render(r: dict, sensors: SensorMeta, smooth_method: str, smooth_window: int)
     st.write("**All sensors - smoothed**")
     fig = facet_grid([sensors.label[s] for s in sensors.ids])
     for i, s in enumerate(sensors.ids, start=1):
-        sub = r["smoothed_wide"][s]
+        sub = decimate(r["smoothed_wide"][s])
         add_area_trace(fig, sub.index, sub.values, sensors.color[s], row=i, col=1)
     fig.update_layout(height=200 * len(sensors.ids), margin=dict(t=40))
     plot(fig)

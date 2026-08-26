@@ -162,15 +162,21 @@ def before_after_chart(x, before: pd.Series, after: pd.Series, after_color: str,
     value on the left, and at the after value on the right (or still at the
     before value if after is now NaN - a point that got dropped, not just
     changed). Returns (fig, mask) so callers can skip rendering entirely
-    when mask is all-False (before == after)."""
+    when mask is all-False (before == after) - `mask` is computed on the
+    full-resolution input (needed for an exact changed-point count/markers),
+    the two line traces are decimated separately so a long series doesn't
+    blow past Streamlit's message-size limit."""
     mask = diff_mask(before, after)
     edges = run_edges(mask)
     marker_y_after = after.where(after.notna(), before)
+    n = len(x)
+    step = -(-n // MAX_POINTS_PER_TRACE) if n > MAX_POINTS_PER_TRACE else 1
+    x_line, before_line, after_line = x[::step], before[::step], after[::step]
     fig = make_subplots(rows=1, cols=2, shared_yaxes=True,
                          subplot_titles=[before_name, after_name], horizontal_spacing=0.05)
-    fig.add_trace(go.Scatter(x=x, y=before, mode="lines", connectgaps=True,
+    fig.add_trace(go.Scatter(x=x_line, y=before_line, mode="lines", connectgaps=True,
                               line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=1, col=1)
-    fig.add_trace(go.Scatter(x=x, y=after, mode="lines", connectgaps=connectgaps_after,
+    fig.add_trace(go.Scatter(x=x_line, y=after_line, mode="lines", connectgaps=connectgaps_after,
                               line=dict(color=after_color), showlegend=False), row=1, col=2)
     if edges.any():
         fig.add_trace(go.Scatter(x=x[edges], y=before[edges], mode="markers", name=changed_name,

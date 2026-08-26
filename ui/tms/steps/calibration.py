@@ -9,7 +9,7 @@ import streamlit as st
 
 from pipeline.tms.config import POLY_COEF_COLUMNS, TOMST_UNIVERSAL_CALIBRATION
 from pipeline.tms.params import identity_mask
-from ui.charts import plot
+from ui.charts import decimate, plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
 from ui.theme import CHANGED_HIGHLIGHT_COLOR, HORIZONTAL_LEGEND
@@ -155,7 +155,7 @@ def _render_detail(calibrated: pd.DataFrame, sensors: SensorMeta) -> None:
     default. A fragment reruns just this function."""
     st.write("**Corrected Signal -> VWC**")
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s], key="tms_calibration_sensor")
-    sub = calibrated[calibrated["sensor_id"] == sensor].sort_values("timestamp").dropna(subset=["signal_corrected", "vwc"])
+    sub = decimate(calibrated[calibrated["sensor_id"] == sensor].sort_values("timestamp").dropna(subset=["signal_corrected", "vwc"]))
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=sub["signal_corrected"], y=sub["vwc"], mode="markers",
                               marker=dict(color=sensors.color[sensor], size=4, opacity=0.5), name="readings"))
@@ -163,8 +163,9 @@ def _render_detail(calibrated: pd.DataFrame, sensors: SensorMeta) -> None:
     plot(fig)
 
     st.write("**VWC time series**")
-    full = calibrated[calibrated["sensor_id"] == sensor].sort_values("timestamp")
-    missing = full[full["is_qc_missing_calibration_params"]]
+    full_res = calibrated[calibrated["sensor_id"] == sensor].sort_values("timestamp")
+    missing = decimate(full_res[full_res["is_qc_missing_calibration_params"]])
+    full = decimate(full_res)
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(x=full["timestamp"], y=full["vwc"], mode="lines", line=dict(color=sensors.color[sensor]), name="VWC"))
     if len(missing):

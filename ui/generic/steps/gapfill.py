@@ -4,7 +4,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
-from ui.charts import facet_grid_before_after, plot
+from ui.charts import decimate, facet_grid_before_after, plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
 from ui.theme import COLORS, HORIZONTAL_LEGEND, REFERENCE_LINE_COLOR
@@ -64,7 +64,7 @@ def render(r: dict, sensors: SensorMeta) -> None:
     if changed_ids:
         fig = facet_grid_before_after([sensors.label[s] for s in changed_ids])
         for i, s in enumerate(changed_ids, start=1):
-            sub = prod[prod["sensor_id"] == s].sort_values("timestamp")
+            sub = decimate(prod[prod["sensor_id"] == s].sort_values("timestamp"))
             _add_sensor_traces(fig, sub, row=i, legend=(i == 1))
         fig.update_layout(height=230 * len(changed_ids), margin=dict(t=90),
                            legend=HORIZONTAL_LEGEND)

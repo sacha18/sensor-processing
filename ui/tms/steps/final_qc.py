@@ -90,9 +90,13 @@ def _render_detail(final: pd.DataFrame, sensors: SensorMeta) -> None:
         after_col = f"{col}_final" if col in FLAGGABLE_COLS else col
         changed = diff_mask(sub[col], sub[after_col]) if col in FLAGGABLE_COLS else None
 
-        fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[col], mode="lines", connectgaps=True,
+        # decimated only for the line traces - run_edges below still needs
+        # the full-resolution `sub` to find each flagged run's true
+        # start/end, not a stride-sampled approximation of it.
+        line_sub = decimate(sub)
+        fig.add_trace(go.Scatter(x=line_sub["timestamp"], y=line_sub[col], mode="lines", connectgaps=True,
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=1)
-        fig.add_trace(go.Scatter(x=sub["timestamp"], y=sub[after_col], mode="lines",
+        fig.add_trace(go.Scatter(x=line_sub["timestamp"], y=line_sub[after_col], mode="lines",
                                   connectgaps=(col not in FLAGGABLE_COLS),
                                   line=dict(color=REFERENCE_LINE_COLOR), showlegend=False), row=i, col=2)
         if changed is None or not changed.any():
@@ -190,7 +194,7 @@ def _render_manual_qc(final: pd.DataFrame, sensors: SensorMeta) -> None:
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s], key="tms_manual_qc_sensor")
     sub = final[final["sensor_id"] == sensor].sort_values("timestamp")
 
-    sel_start, sel_end = _selection_chart(sub, sensor, sensors)
+    sel_start, sel_end = _selection_chart(decimate(sub), sensor, sensors)
     # keys the interval date inputs by the current box selection (same trick
     # as ui.tms.config.editor_key) - a new drag replaces their default value,
     # while adjusting the date/time within the same selection (same key) is

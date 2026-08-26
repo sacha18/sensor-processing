@@ -54,7 +54,7 @@ def render(r: dict, sensors: SensorMeta) -> None:
         cols[0].metric("Gaps", len(gaps))
         cols[1].metric("Missing steps (total)", int(gaps["n_missing_steps"].sum()))
         cols[2].metric("Longest gap", str(gaps["gap_duration"].max()))
-        st.dataframe(gaps, width='stretch')
+        render_capped_dataframe(gaps, width='stretch')
         st.download_button("Download gap report CSV", to_csv_bytes(gaps, index=False),
                             file_name="tms_gap_report.csv", mime="text/csv", icon=":material/download:")
 

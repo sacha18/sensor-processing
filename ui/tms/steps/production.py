@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui.charts import add_area_trace, facet_grid, plot
+from ui.charts import add_area_trace, decimate, facet_grid, plot
 from ui.generic.data_source import SensorMeta
-from ui.format import to_csv_bytes_cached
+from ui.format import render_capped_dataframe, to_csv_bytes_cached
 from ui.stepper import fixed_bottom_right
 
 
@@ -33,11 +33,12 @@ def render(r: dict, sensors: SensorMeta, analysis_page) -> None:
     for i, s in enumerate(sensors.ids, start=1):
         sub = production[production["sensor_id"] == s].sort_values("timestamp").dropna(subset=["vwc_final"])
         if len(sub):
+            sub = decimate(sub)
             add_area_trace(fig, sub["timestamp"], sub["vwc_final"].to_numpy(), sensors.color[s], row=i, col=1)
     fig.update_layout(height=200 * len(sensors.ids), margin=dict(t=40))
     plot(fig)
 
     st.write("Production table (one row per sensor x timestamp):")
-    st.dataframe(production, width='stretch', height=300)
+    render_capped_dataframe(production, width='stretch', height=300)
 
     _render_bottom_bar(production, analysis_page)
