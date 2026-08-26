@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from pipeline.tms.config import POLY_COEF_COLUMNS, TOMST_UNIVERSAL_CALIBRATION
-from pipeline.tms.params import match_mask
+from pipeline.tms.params import identity_mask
 from ui.charts import plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
@@ -20,10 +20,10 @@ _SECTION = "tms_calibration"
 
 def _is_present(df: pd.DataFrame, sensor_key) -> bool:
     """Whether a rule's sensor_id/group still matches at least one currently
-    loaded sensor - match_mask's identity matching alone (no valid_from/
-    valid_to), so a rule from a previous upload that no longer applies to
-    any loaded sensor doesn't linger in the list."""
-    return match_mask(df, pd.Series({"sensor_id": sensor_key})).any()
+    loaded sensor - identity matching alone (no valid_from/valid_to), so a
+    rule from a previous upload that no longer applies to any loaded sensor
+    doesn't linger in the list."""
+    return identity_mask(df, sensor_key).any()
 
 
 def _clean(v, default=""):
@@ -144,6 +144,15 @@ def render(r: dict, sensors: SensorMeta) -> None:
         st.subheader("Calibration parameters", divider="gray")
         _render_rules(calibrated, sensors)
 
+    _render_detail(calibrated, sensors)
+
+
+@st.fragment
+def _render_detail(calibrated: pd.DataFrame, sensors: SensorMeta) -> None:
+    """Isolated as a fragment - without it, changing Sensor triggers a
+    full-page rerun (rebuilding the calibration rules section above too),
+    since Streamlit reruns the whole script on any widget interaction by
+    default. A fragment reruns just this function."""
     st.write("**Corrected Signal -> VWC**")
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s], key="tms_calibration_sensor")
     sub = calibrated[calibrated["sensor_id"] == sensor].sort_values("timestamp").dropna(subset=["signal_corrected", "vwc"])

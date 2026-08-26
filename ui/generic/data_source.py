@@ -1,16 +1,19 @@
 """Data source expander: upload/sample loading, channel selection, unit labels,
-and the cached pipeline run.
+and the (disk-cached, per-stage) pipeline run.
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 
 import streamlit as st
 
 import pipeline.generic as P
+from pipeline import store
 from ui.format import is_telemetry_channel, looks_like_tms_export
 from ui.generic.settings import Settings
-from ui.loading import finish_loading_gate, uploads_fingerprint
+from ui.loading import finish_loading_gate, live_uploads, uploads_fingerprint
+from ui.session import get_session_id
 from ui.theme import CATEGORICAL_COLORS
 
 
@@ -21,32 +24,31 @@ class SensorMeta:
     color: dict   # sensor_id -> hex color
 
 
-@st.cache_data(show_spinner="Running pipeline...")
-def get_pipeline(raw_long, step_min, outlier_cfg, max_gap, smooth_window, smooth_method,
-                  use_donor_regression, donor_min_corr):
-    return P.process_pipeline(raw_long, step_min=step_min, outlier_cfg=outlier_cfg, max_interp_gap=max_gap,
-                               smooth_window=smooth_window, smooth_method=smooth_method,
-                               use_donor_regression=use_donor_regression, donor_min_corr=donor_min_corr)
+def _fingerprint_hash(fingerprint) -> str:
+    return hashlib.sha1(repr(fingerprint).encode()).hexdigest()[:16]
 
 
-@st.cache_data(show_spinner="Loading sensor files...")
-def _load_raw_dir(data_dir):
-    """Cached wrapper around P.load_raw - without this, every rerun (any
-    widget interaction, not just a new upload) re-reads and re-parses every
-    sensor file from disk."""
-    return P.load_raw(data_dir)
+_LAZY_LOADERS = {
+    "span": lambda p: store.read_df(p).set_index("sensor_id"),
+    "grid": lambda p: store.read_df(p)["timestamp"],
+    "sim": store.load_pickle,
+}
 
 
-@st.cache_data(show_spinner="Parsing uploaded files...")
-def _load_raw_uploads(uploaded_files):
-    return P.load_raw_from_uploads(uploaded_files)
+def _materialize(paths: dict) -> dict:
+    """Wraps a process_pipeline() result ({stage_name: Path}) in a dict-like
+    object that reads a stage into a DataFrame (or unpickles it, for "sim")
+    only the first time a step actually accesses it - a single step only
+    ever touches a handful of the pipeline's 12 stage outputs, so this is
+    the difference between holding 1-3 full DataFrames in memory per render
+    vs. all 12 regardless of which step is on screen."""
+    return store.LazyFrameDict(paths, _LAZY_LOADERS)
 
 
 _UPLOAD_KEY_BASE = "data_source_uploaded_files"
 _CHANNELS_KEY_BASE = "data_source_channels"
 _UNITS_KEY_BASE = "data_source_units_file"
 _RELOAD_VERSION_KEY = "data_source_reload_version"
-_RAW_CACHE_KEY_BASE = "data_source_raw_long_cache"
 _RAW_CACHE_FP_KEY_BASE = "data_source_raw_long_cache_fp"
 LOADING_NAMESPACE = "generic_data_source"
 
@@ -100,7 +102,6 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
     upload_key = _versioned(_UPLOAD_KEY_BASE)
     channels_key = _versioned(_CHANNELS_KEY_BASE)
     units_key = _versioned(_UNITS_KEY_BASE)
-    raw_cache_key = _versioned(_RAW_CACHE_KEY_BASE)
     raw_cache_fp_key = _versioned(_RAW_CACHE_FP_KEY_BASE)
 
     if show_ui:
@@ -123,6 +124,7 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
                 st.rerun()
     else:
         uploaded_files = st.session_state.get(upload_key)
+    uploaded_files = live_uploads(uploaded_files)
 
     if uploaded_files:
         fingerprint = uploads_fingerprint(uploaded_files)
@@ -133,6 +135,9 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
     if skip_heavy:
         return None, None, None
 
+    pipeline_dir = store.session_dir(get_session_id(), "generic")
+    raw_dir = pipeline_dir / "raw" / _fingerprint_hash(fingerprint)
+
     if uploaded_files:
         tms_looking = [f.name for f in uploaded_files if looks_like_tms_export(f.name, f.getvalue())]
         if tms_looking:
@@ -140,29 +145,31 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
                      "format (phenomenon_time/result) - switch to the **TOMST TMS-4 (soil)** pipeline above to "
                      "process it.")
             st.stop()
-        try:
-            raw_long = _load_raw_uploads(uploaded_files)
-        except Exception as e:
-            st.error(f"Could not parse the uploaded files: {e}")
-            st.stop()
-        # Cached independently of the widget: Streamlit doesn't reliably
-        # keep a file_uploader's attached files across many reruns spent on
-        # other steps/pages (see peek_generic_fingerprint) - once parsed,
-        # later runs reuse this instead of silently falling back to the
-        # sample dataset.
-        st.session_state[raw_cache_key] = raw_long
+        if not raw_dir.exists():
+            try:
+                P.write_raw_uploads_to_store(uploaded_files, raw_dir)
+            except Exception as e:
+                st.error(f"Could not parse the uploaded files: {e}")
+                st.stop()
+        # Fingerprint (not the parsed data itself) is stashed independently of
+        # the widget: Streamlit doesn't reliably keep a file_uploader's
+        # attached files across many reruns spent on other steps/pages (see
+        # peek_generic_fingerprint) - the parsed data lives on disk under
+        # raw_dir, keyed by this same fingerprint, so remembering just the
+        # fingerprint is enough to find it again on a later rerun.
         st.session_state[raw_cache_fp_key] = fingerprint
-    elif raw_cache_key in st.session_state:
-        raw_long = st.session_state[raw_cache_key]
+    elif raw_dir.exists():
+        pass  # already parsed earlier this session (or a prior container run) - reuse on disk
     else:
         try:
             data_dir = P.resolve_data_dir()
         except FileNotFoundError as e:
             st.error(str(e))
             st.stop()
-        raw_long = _load_raw_dir(data_dir)
+        P.write_raw_dir_to_store(raw_dir, data_dir)
 
-    all_channel_ids = sorted(raw_long["sensor_id"].unique())
+    raw_paths = sorted(raw_dir.glob("*.parquet"))
+    all_channel_ids = sorted(P.sensor_id_of_part(p) for p in raw_paths)
     default_channels = [s for s in all_channel_ids if not is_telemetry_channel(s)]
 
     if show_ui:
@@ -188,7 +195,8 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
     if not included_channels:
         st.error("No channels selected - pick at least one to run the pipeline.")
         st.stop()
-    raw_long = raw_long[raw_long["sensor_id"].isin(included_channels)].reset_index(drop=True)
+    included = set(included_channels)
+    raw_paths = [p for p in raw_paths if P.sensor_id_of_part(p) in included]
 
     units = {}
     if units_file is not None:
@@ -198,9 +206,17 @@ def render_data_source(settings: Settings, show_ui: bool, skip_heavy: bool = Fal
             if show_ui:
                 st.warning(f"Could not parse the unit mapping file: {e}")
 
-    r = get_pipeline(raw_long, step_min=settings.step_min, outlier_cfg=settings.outlier_cfg, max_gap=settings.max_gap,
-                      smooth_window=settings.smooth_window, smooth_method=settings.smooth_method,
-                      use_donor_regression=settings.use_donor_regression, donor_min_corr=settings.donor_min_corr)
+    with st.status("Running pipeline...", expanded=False) as status:
+        def _progress(label: str) -> None:
+            status.update(label=label, expanded=True)
+            st.write(f"- {label}...")
+
+        paths = P.process_pipeline(pipeline_dir, raw_paths, step_min=settings.step_min, outlier_cfg=settings.outlier_cfg,
+                                    max_interp_gap=settings.max_gap, smooth_window=settings.smooth_window,
+                                    smooth_method=settings.smooth_method, use_donor_regression=settings.use_donor_regression,
+                                    donor_min_corr=settings.donor_min_corr, progress=_progress)
+        status.update(label="Pipeline up to date", state="complete", expanded=False)
+    r = _materialize(paths)
     finish_loading_gate(LOADING_NAMESPACE, fingerprint)
     sensor_ids = sorted(r["reg_long"]["sensor_id"].unique())
     sensors = SensorMeta(

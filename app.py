@@ -18,6 +18,7 @@ import logging
 
 import streamlit as st
 
+from pipeline import store
 from ui.generic.analysis_page import render_generic_analysis_page
 from ui.generic.page import render_generic_page
 from ui.picker import render_picker
@@ -32,6 +33,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 st.set_page_config(page_title="Sensor cleaning pipeline", layout="wide")
 register_plotly_theme()
 inject_page_css()
+
+
+@st.cache_resource(show_spinner=False)
+def _cleanup_store_once() -> None:
+    """Purges stale per-session Parquet/DuckDB store directories (see
+    pipeline.store) - st.cache_resource runs this once per server process
+    (not once per browser session/rerun), which is what a startup sweep
+    needs since the store now persists across app restarts."""
+    store.cleanup_old_sessions()
+
+
+_cleanup_store_once()
 
 generic_page = st.Page(lambda: render_generic_page(picker_page, generic_analysis_page), title="Generic pipeline",
                         icon=":material/show_chart:", url_path="generic")

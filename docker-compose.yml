@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      SDP_STORE_DIR: /data/store
+      SDP_STORE_TTL_DAYS: ${SDP_STORE_TTL_DAYS:-7}
+      SENSOR_DATA_DIR: ${SENSOR_DATA_DIR:-}
+    volumes:
+      - sdp_data:/data
+    restart: unless-stopped
+
+  # Ad hoc inspection of the persisted Parquet/DuckDB store - DuckDB is an
+  # embedded engine, not a network server, so this is just the CLI pointed at
+  # the same volume, not something `app` talks to. Not started by `docker
+  # compose up` (profile-gated); run explicitly:
+  #   docker compose run --rm duckdb-cli duckdb /data/store/sessions/<id>/<pipeline>
+  duckdb-cli:
+    image: datacatering/duckdb
+    profiles: ["tools"]
+    volumes:
+      - sdp_data:/data:ro
+    entrypoint: ["duckdb"]
+
+volumes:
+  sdp_data:

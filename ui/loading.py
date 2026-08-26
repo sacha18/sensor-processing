@@ -46,9 +46,26 @@ def finish_loading_gate(namespace: str, fingerprint) -> None:
     st.session_state[f"{namespace}_loading"] = False
 
 
+def live_uploads(uploaded_files) -> list:
+    """Drops `DeletedFile` placeholders from a file_uploader's selection.
+
+    If the server process restarted (e.g. an OOM kill) while a browser tab
+    was still holding an old session, Streamlit resolves its previously
+    uploaded files to `DeletedFile` objects (no `.name`/`.size`/`.getvalue()`
+    - the underlying temp files are gone) instead of real UploadedFile
+    objects. Callers should run every `uploaded_files` list through this
+    before touching `.name`/`.getvalue()` on any entry - an all-deleted
+    result is treated the same as "no files", falling back to the last
+    cached upload (see peek_*_fingerprint) or prompting a re-upload."""
+    if not uploaded_files:
+        return []
+    return [f for f in uploaded_files if hasattr(f, "name")]
+
+
 def uploads_fingerprint(uploaded_files) -> tuple:
     """Cheap (metadata-only, no content read) identity for a file_uploader's
     current selection - stable across reruns that don't actually change it."""
-    if not uploaded_files:
+    live_files = live_uploads(uploaded_files)
+    if not live_files:
         return ("__none__",)
-    return tuple((f.name, f.size) for f in uploaded_files)
+    return tuple((f.name, f.size) for f in live_files)

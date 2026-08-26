@@ -10,27 +10,35 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .. import store
+
+_DEDUPE_QUERY = """
+SELECT * EXCLUDE (rn) FROM (
+    SELECT *, row_number() OVER (
+        PARTITION BY sensor_id, timestamp ORDER BY CAST(observation_id AS BIGINT) DESC
+    ) AS rn
+    FROM raw_long
+) WHERE rn = 1
+ORDER BY sensor_id, timestamp
+"""
+
+_DUP_REPORT_QUERY = """
+SELECT sensor_id, timestamp, COUNT(*) AS n_dup,
+       COUNT(DISTINCT value_raw) AS n_distinct_values,
+       MIN(value_raw) AS value_min, MAX(value_raw) AS value_max,
+       MAX(value_raw) - MIN(value_raw) AS value_spread,
+       COUNT(DISTINCT value_raw) > 1 AS conflicting
+FROM raw_long
+GROUP BY sensor_id, timestamp
+HAVING COUNT(*) > 1
+"""
+
 
 def dedupe(raw_long: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    dup_counts = raw_long.groupby(["sensor_id", "timestamp"]).size()
-    dup_keys = dup_counts[dup_counts > 1].reset_index(name="n_dup")
-
-    dup_report = dup_keys.merge(
-        raw_long.groupby(["sensor_id", "timestamp"])["value_raw"].agg(
-            n_distinct_values="nunique", value_min="min", value_max="max"
-        ).reset_index(),
-        on=["sensor_id", "timestamp"],
-    )
-    dup_report["value_spread"] = dup_report["value_max"] - dup_report["value_min"]
-    dup_report["conflicting"] = dup_report["n_distinct_values"] > 1
-
-    out = raw_long.copy()
-    out["_obs_id_num"] = out["observation_id"].astype(int)
-    out = (
-        out.sort_values("_obs_id_num")
-        .drop_duplicates(subset=["sensor_id", "timestamp"], keep="last")
-        .drop(columns="_obs_id_num")
-        .sort_values(["sensor_id", "timestamp"])
-        .reset_index(drop=True)
-    )
+    """Keeps the highest observation_id (most recent write) for any repeated
+    (sensor, timestamp) pair - a DuckDB window function replaces the old
+    sort + drop_duplicates(keep='last')."""
+    sources = {"raw_long": raw_long}
+    out = store.sql_df(_DEDUPE_QUERY, sources)
+    dup_report = store.sql_df(_DUP_REPORT_QUERY, sources)
     return out, dup_report

@@ -6,7 +6,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from pipeline.tms.params import match_mask
+from pipeline.tms.params import identity_mask
 from ui.charts import before_after_chart, plot
 from ui.generic.data_source import SensorMeta
 from ui.fullscreen import is_fullscreen
@@ -18,10 +18,10 @@ _SECTION = "tms_correction"
 
 def _is_present(df: pd.DataFrame, sensor_key) -> bool:
     """Whether a rule's sensor_id/group still matches at least one currently
-    loaded sensor - match_mask's identity matching alone (no valid_from/
-    valid_to), so a rule from a previous upload that no longer applies to
-    any loaded sensor doesn't linger in the list."""
-    return match_mask(df, pd.Series({"sensor_id": sensor_key})).any()
+    loaded sensor - identity matching alone (no valid_from/valid_to), so a
+    rule from a previous upload that no longer applies to any loaded sensor
+    doesn't linger in the list."""
+    return identity_mask(df, sensor_key).any()
 
 
 def _fmt_factor(v) -> str:
@@ -144,6 +144,15 @@ def render(r: dict, sensors: SensorMeta) -> None:
         st.subheader("Correction parameters", divider="gray")
         _render_rules(corrected, sensors)
 
+    _render_detail(corrected, sensors)
+
+
+@st.fragment
+def _render_detail(corrected: pd.DataFrame, sensors: SensorMeta) -> None:
+    """Isolated as a fragment - without it, changing Sensor triggers a
+    full-page rerun (rebuilding the correction rules section above too),
+    since Streamlit reruns the whole script on any widget interaction by
+    default. A fragment reruns just this function."""
     st.write("**Before / after - QC'd Signal vs. corrected Signal**")
     sensor = st.selectbox("Sensor", sensors.ids, format_func=lambda s: sensors.label[s], key="tms_correction_sensor")
     sub = corrected[corrected["sensor_id"] == sensor].sort_values("timestamp")

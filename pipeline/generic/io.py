@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from .. import store
 from .config import ENV_DATA_DIR, SAMPLE_DATA_DIR, SUPPORTED_EXTENSIONS
 
 
@@ -59,31 +60,61 @@ def _sensor_frame(sensor_id: str, records) -> pd.DataFrame:
     return df[["sensor_id", "observation_id", "timestamp", "value_raw"]]
 
 
-def _stack_frames(frames: list) -> pd.DataFrame:
-    if not frames:
-        raise ValueError("No sensor files provided")
-    return pd.concat(frames, ignore_index=True).sort_values(["sensor_id", "timestamp"]).reset_index(drop=True)
+def _clear_parquet_parts(out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for p in out_dir.glob("part_*.parquet"):
+        p.unlink()
 
 
-def load_raw(data_dir: Path = None) -> pd.DataFrame:
-    """Load every `<sensor_id>.json`/`.csv` file in data_dir (falls back per resolve_data_dir)."""
+def _part_filename(i: int, sensor_id: str) -> str:
+    # sensor_id is embedded in the filename (not just inside the Parquet
+    # file) so callers can filter to a subset of channels by filename alone -
+    # each part is exactly one sensor's file, so no read is needed just to
+    # find out which sensor a part belongs to.
+    safe = "".join(c if c not in "/\\" else "_" for c in str(sensor_id))
+    return f"part_{i:05d}__{safe}.parquet"
+
+
+def sensor_id_of_part(path: Path) -> str:
+    """Recovers the sensor_id encoded by _part_filename - used to filter raw
+    Parquet parts down to a channel selection without reading file contents."""
+    return Path(path).stem.split("__", 1)[1]
+
+
+def write_raw_dir_to_store(out_dir: Path, data_dir: Path = None) -> list[Path]:
+    """Parses every `<sensor_id>.json`/`.csv` file in data_dir (falls back per
+    resolve_data_dir) and writes each straight to its own Parquet part in
+    `out_dir` - the per-file parsing itself stays plain pandas (quirky,
+    format-specific, not a SQL candidate), but nothing is `pd.concat`-ed into
+    one big in-memory frame here: the "raw" dataset downstream is just a
+    DuckDB glob scan over these parts (see pipeline.store.sql_df/read_df)."""
     data_dir = resolve_data_dir(data_dir) if data_dir is None else Path(data_dir)
     files = sorted(f for ext in SUPPORTED_EXTENSIONS for f in data_dir.glob(f"*{ext}"))
     if not files:
         raise FileNotFoundError(f"No {'/'.join(SUPPORTED_EXTENSIONS)} files in {data_dir}")
-    return _stack_frames([_sensor_frame(f.stem, _parse_records(f.name, f.read_bytes())) for f in files])
+    _clear_parquet_parts(out_dir)
+    paths = []
+    for i, f in enumerate(files):
+        df = _sensor_frame(f.stem, _parse_records(f.name, f.read_bytes()))
+        paths.append(store.write_parquet(df, out_dir / _part_filename(i, f.stem)))
+    return paths
 
 
-def load_raw_from_uploads(uploaded_files: list) -> pd.DataFrame:
-    """Load from a list of file-like objects (e.g. Streamlit's UploadedFile, .json or
-    .csv) - each file's stem becomes its sensor_id, same schema as load_raw."""
-    frames = []
-    for f in uploaded_files:
+def write_raw_uploads_to_store(uploaded_files: list, out_dir: Path) -> list[Path]:
+    """Same as write_raw_dir_to_store, for a list of file-like objects (e.g.
+    Streamlit's UploadedFile, .json or .csv) - each file's stem becomes its
+    sensor_id."""
+    if not uploaded_files:
+        raise ValueError("No sensor files provided")
+    _clear_parquet_parts(out_dir)
+    paths = []
+    for i, f in enumerate(uploaded_files):
         name = getattr(f, "name", "sensor.json")
         sensor_id = Path(name).stem
         content = f.getvalue() if hasattr(f, "getvalue") else f.read()
-        frames.append(_sensor_frame(sensor_id, _parse_records(name, content)))
-    return _stack_frames(frames)
+        df = _sensor_frame(sensor_id, _parse_records(name, content))
+        paths.append(store.write_parquet(df, out_dir / _part_filename(i, sensor_id)))
+    return paths
 
 
 def parse_units_mapping(name: str, content: bytes | str) -> dict:

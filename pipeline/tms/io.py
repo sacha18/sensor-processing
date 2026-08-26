@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import io
 import logging
+import tempfile
 import zipfile
 from pathlib import Path
 
 import pandas as pd
 
+from .. import store
 from .config import FILENAME_RE, MERGED_EXPORT_COLUMNS, RAW_FIELDS, TIMESTAMP_FORMATS
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,17 @@ logger = logging.getLogger(__name__)
 # Uploads are parsed in batches of this size - reports progress and keeps
 # one bad file from failing the whole session (see load_tms_raw_from_uploads).
 UPLOAD_BATCH_SIZE = 50
+
+# DuckDB TRY_STRPTIME equivalents of TIMESTAMP_FORMATS - same codes, same
+# fallback order (see _parse_timestamps).
+_DUCKDB_TIMESTAMP_FORMATS = TIMESTAMP_FORMATS
+_RAW_CSV_COLUMNS = {c: "VARCHAR" for c in RAW_FIELDS}
+# every RAW_FIELDS column except v10_raw (optional/unused, carried through
+# as-is - see config.py::RAW_FIELDS) must parse cleanly for a file to be
+# accepted - same "any bad value rejects the whole file" rule _parse_timestamps/
+# _parse_decimal/row_index.astype(int) enforce today, one file at a time.
+_REQUIRED_PARSED_COLUMNS = ["sensor_id", "row_index", "timestamp", "v3_raw", "t1_raw",
+                            "t2_raw", "t3_raw", "signal_raw", "shake", "err_flag"]
 
 
 def extract_sensor_id(filename: str) -> str:
@@ -93,6 +106,78 @@ def parse_tms_records(name: str, content: bytes | str) -> pd.DataFrame:
     })
 
 
+def _bulk_parse_tms_files(entries: list[tuple[str, bytes]]) -> tuple[pd.DataFrame, list[str]]:
+    """Parses many raw TOMST export files in a single DuckDB native CSV scan
+    instead of one `pd.read_csv` + row-by-row timestamp-guessing loop per
+    file (parse_tms_records) - the dominant cost once an upload reaches
+    hundreds of files / millions of rows, since DuckDB's CSV reader is a
+    single multi-threaded C++ scan across every file at once instead of N
+    sequential Python calls.
+
+    Applies the exact same per-file rule as parse_tms_records: any row with
+    an unparseable required field (see _REQUIRED_PARSED_COLUMNS) rejects
+    that entire file, not just the row - a fully blank line (e.g. a
+    trailing newline) is not an error, it's silently skipped, matching
+    pandas' default `skip_blank_lines` behaviour parse_tms_records relies on.
+
+    Returns (good_df, bad_names) - bad_names are the entries that need to
+    fall back to parse_tms_records (for a precise per-file error message),
+    not a parse result themselves."""
+    with tempfile.TemporaryDirectory(prefix="tms_bulk_") as tmp:
+        tmp_path = Path(tmp)
+        temp_paths = []
+        for i, (name, content) in enumerate(entries):
+            p = tmp_path / f"{i:05d}__{Path(name).name}"
+            p.write_bytes(content if isinstance(content, bytes) else content.encode())
+            temp_paths.append(p)
+
+        columns_literal = "{" + ", ".join(f"'{c}': 'VARCHAR'" for c in RAW_FIELDS) + "}"
+        format_coalesce = ", ".join(f"TRY_STRPTIME(timestamp_raw, '{fmt}')" for fmt in _DUCKDB_TIMESTAMP_FORMATS)
+        decimal_cols = ["v3_raw", "t1_raw", "t2_raw", "t3_raw", "signal_raw", "shake", "err_flag"]
+        decimal_select = ",\n            ".join(
+            f"TRY_CAST(REPLACE({c}, ',', '.') AS DOUBLE) AS {c}" for c in decimal_cols
+        )
+        blank_check = " AND ".join(f"{c} IS NULL" for c in RAW_FIELDS if c != "v10_raw")
+
+        query = f"""
+        WITH raw AS (
+            SELECT *, NULLIF(regexp_extract(filename, '/(\\d{{5}})__(.+)$', 2), '') AS orig_name
+            FROM read_csv({store.sql_list_literal([str(p) for p in temp_paths])},
+                           delim=';', header=false, null_padding=true, filename=true,
+                           auto_detect=false, columns={columns_literal})
+        ),
+        parsed AS (
+            SELECT
+                orig_name,
+                NULLIF(regexp_extract(orig_name, '(?i)data_(\\d+)_\\d{{4}}_\\d{{2}}_\\d{{2}}_\\d+\\.csv$', 1), '') AS sensor_id,
+                orig_name AS source_file,
+                TRY_CAST(row_index AS BIGINT) AS row_index,
+                COALESCE({format_coalesce}) AS timestamp,
+                {decimal_select},
+                v10_raw,
+                ({blank_check}) AS is_blank_line
+            FROM raw
+        )
+        SELECT * FROM parsed WHERE NOT is_blank_line
+        """
+        df = store.sql_df(query, {})
+
+    if df.empty:
+        return df.reindex(columns=MERGED_EXPORT_COLUMNS), [name for name, _ in entries]
+
+    all_names = {name for name, _ in entries}
+    bad_mask = df[_REQUIRED_PARSED_COLUMNS].isna().any(axis=1)
+    bad_from_rows = set(df.loc[bad_mask, "orig_name"])
+    # a name present in `entries` but entirely absent from `df` (e.g. every
+    # line in it was blank) is also a failure, not a silent success.
+    missing_entirely = all_names - set(df["orig_name"].dropna())
+    bad_names = sorted(bad_from_rows | missing_entirely)
+
+    good_df = df.loc[~df["orig_name"].isin(bad_names)].drop(columns=["orig_name", "is_blank_line"], errors="ignore")
+    good_df = good_df.reindex(columns=MERGED_EXPORT_COLUMNS)
+    return good_df, bad_names
+
+
 def looks_like_merged_export(content: bytes | str) -> bool:
     """Sniffs whether an upload is this app's own "Download merged raw
     archive CSV" export (comma-separated, header row) rather than a raw
@@ -118,12 +203,6 @@ def parse_merged_export(content: bytes | str) -> pd.DataFrame:
     return df[MERGED_EXPORT_COLUMNS]
 
 
-def _stack_frames(frames: list) -> pd.DataFrame:
-    if not frames:
-        raise ValueError("No TMS files provided")
-    return pd.concat(frames, ignore_index=True).sort_values(["sensor_id", "timestamp"]).reset_index(drop=True)
-
-
 def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
     """Expands a .zip into (filename, content) pairs, skipping directories,
     hidden/system entries (.DS_Store, __MACOSX/...), and non-.csv members."""
@@ -139,13 +218,25 @@ def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
     return out
 
 
-def load_tms_raw_from_uploads(uploaded_files: list, batch_size: int = UPLOAD_BATCH_SIZE
-                               ) -> tuple[pd.DataFrame, list[tuple[str, str]]]:
+def write_tms_raw_uploads_to_store(uploaded_files: list, out_dir: Path, batch_size: int = UPLOAD_BATCH_SIZE
+                                    ) -> tuple[list[Path], list[tuple[str, str]]]:
     """Load from a list of file-like objects (e.g. Streamlit's UploadedFile).
     Each entry is a raw TOMST export, a merged raw archive, or a .zip of
     either (mixable in one upload).
 
-    Returns (raw_wide, failures), with failures as
+    Raw TOMST exports (the overwhelming majority on a real multi-file
+    session) are parsed in bulk per batch via _bulk_parse_tms_files - one
+    native DuckDB CSV scan across up to `batch_size` files at once, instead
+    of `batch_size` sequential `pd.read_csv` + row-by-row timestamp-guessing
+    calls (parse_tms_records). Only the (normally few-to-none) files that
+    scan flags as malformed fall back to parse_tms_records one at a time,
+    to recover the exact per-file error message. Merged raw archive
+    "resume" uploads (rare - see looks_like_merged_export) keep using their
+    own dedicated parser, already a single well-formed CSV read. Each batch
+    is written to Parquet as one part, not one part per input file - see
+    the batching rationale on the old per-file version this replaced.
+
+    Returns (paths, failures), with failures as
     [(filename, error message), ...] for any file that didn't parse - one
     bad file is skipped rather than aborting the whole upload."""
     entries = []
@@ -160,24 +251,54 @@ def load_tms_raw_from_uploads(uploaded_files: list, batch_size: int = UPLOAD_BAT
             entries.append((name, content))
 
     total = len(entries)
-    frames = []
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for p in out_dir.glob("part_*.parquet"):
+        p.unlink()
+    paths = []
     failures = []
     logger.info("TMS upload: parsing %d file(s) in batches of %d", total, batch_size)
     for batch_start in range(0, total, batch_size):
         batch = entries[batch_start:batch_start + batch_size]
         batch_end = batch_start + len(batch)
         logger.info("TMS upload: batch %d-%d of %d", batch_start + 1, batch_end, total)
-        for name, content in batch:
+
+        is_merged = [looks_like_merged_export(c) for _, c in batch]
+        merged_batch = [nc for nc, m in zip(batch, is_merged) if m]
+        raw_batch = [nc for nc, m in zip(batch, is_merged) if not m]
+
+        batch_frames = []
+        for name, content in merged_batch:
             try:
-                if looks_like_merged_export(content):
-                    frames.append(parse_merged_export(content))
-                else:
-                    frames.append(parse_tms_records(name, content))
+                batch_frames.append(parse_merged_export(content))
             except Exception as e:
                 logger.warning("TMS upload: failed to parse %r: %s", name, e)
                 failures.append((name, str(e)))
-    logger.info("TMS upload: %d/%d file(s) parsed successfully, %d failed",
-                len(frames), total, len(failures))
-    if not frames:
+
+        if raw_batch:
+            try:
+                good_df, bad_names = _bulk_parse_tms_files(raw_batch)
+            except Exception as e:
+                # the whole bulk scan failed structurally (not a per-file
+                # data issue) - fall back to the slow, safe per-file path
+                # for this entire batch rather than losing it.
+                logger.warning("TMS upload: bulk parse failed for batch %d-%d (%s), falling back per-file",
+                                batch_start + 1, batch_end, e)
+                good_df, bad_names = pd.DataFrame(columns=MERGED_EXPORT_COLUMNS), [n for n, _ in raw_batch]
+            if not good_df.empty:
+                batch_frames.append(good_df)
+            bad_content = dict(raw_batch)
+            for name in bad_names:
+                try:
+                    batch_frames.append(parse_tms_records(name, bad_content[name]))
+                except Exception as e:
+                    logger.warning("TMS upload: failed to parse %r: %s", name, e)
+                    failures.append((name, str(e)))
+
+        if batch_frames:
+            batch_df = pd.concat(batch_frames, ignore_index=True) if len(batch_frames) > 1 else batch_frames[0]
+            paths.append(store.write_parquet(batch_df, out_dir / f"part_{len(paths):05d}.parquet"))
+    logger.info("TMS upload: %d/%d file(s) parsed successfully (%d part file(s) written), %d failed",
+                total - len(failures), total, len(paths), len(failures))
+    if not paths:
         raise ValueError(f"No TMS files could be parsed ({len(failures)} failed)")
-    return _stack_frames(frames), failures
+    return paths, failures

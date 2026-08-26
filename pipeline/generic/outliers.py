@@ -49,22 +49,32 @@ def hampel_flags(x: pd.Series, half_window: int = HAMPEL_HALF_WINDOW, k: float =
 # *identical* readings. Hampel structurally can't catch this (MAD is 0 inside
 # a flatline, so it's skipped by design) - a distinct fault mode needs a
 # distinct method.
+#
+# Vectorized via run-length encoding (cumsum of "value changed from the
+# previous one" as a run id, bincount to get each run's length) rather than
+# a per-point Python while-loop - on a real multi-sensor, multi-channel TMS
+# run (52 sensors x 4 channels x ~120k points) the loop was the dominant
+# cost of the whole initial-QC stage.
 
 def flatline_flags(x: pd.Series, min_run: int = 6) -> pd.Series:
     vals = x.to_numpy(dtype=float)
     n = len(vals)
-    flags = np.zeros(n, dtype=bool)
-    i = 0
-    while i < n:
-        if np.isnan(vals[i]):
-            i += 1
-            continue
-        j = i + 1
-        while j < n and vals[j] == vals[i]:
-            j += 1
-        if j - i >= min_run:
-            flags[i:j] = True
-        i = j
+    if n == 0:
+        return pd.Series(vals, index=x.index, dtype=bool)
+
+    valid = ~np.isnan(vals)
+    # a new run starts wherever the value differs from the previous one, or
+    # either side of the pair is NaN (a NaN never joins/extends a run)
+    starts_new_run = np.ones(n, dtype=bool)
+    starts_new_run[1:] = ~((vals[1:] == vals[:-1]) & valid[1:] & valid[:-1])
+    run_id = np.cumsum(starts_new_run) - 1
+
+    run_lengths = np.zeros(n, dtype=np.int64)
+    if valid.any():
+        counts = np.bincount(run_id[valid])
+        run_lengths[valid] = counts[run_id[valid]]
+
+    flags = valid & (run_lengths >= min_run)
     return pd.Series(flags, index=x.index)
 
 
@@ -88,6 +98,10 @@ def percentile_flags(x: pd.Series, lo_pct: float = 0.5, hi_pct: float = 99.5) ->
 # unlike Hampel it has no window context, so a genuine sharp ramp (several
 # large steps in the same direction) gets flagged too - off by default, opt-in
 # for datasets known not to have legitimate rapid swings.
+#
+# Vectorized: `diffs > thresh` is False wherever `diffs` is NaN (any IEEE-754
+# comparison against NaN is False), which is exactly the old loop's explicit
+# `if isnan(...): continue` skip - no per-point Python loop needed.
 
 def rate_flags(x: pd.Series, k: float = 8.0) -> pd.Series:
     vals = x.to_numpy(dtype=float)
@@ -103,11 +117,7 @@ def rate_flags(x: pd.Series, k: float = 8.0) -> pd.Series:
     if scale == 0:
         return pd.Series(flags, index=x.index)
     thresh = k * scale
-    for i in range(1, n):
-        if np.isnan(vals[i]) or np.isnan(vals[i - 1]):
-            continue
-        if abs(vals[i] - vals[i - 1]) > thresh:
-            flags[i] = True
+    flags[1:] = diffs > thresh
     return pd.Series(flags, index=x.index)
 
 

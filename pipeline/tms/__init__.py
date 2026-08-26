@@ -28,10 +28,10 @@ from .correction import apply_correction
 from .events import field_event_flags
 from .final_qc import detect_final_qc
 from .initial_qc import detect_initial_qc
-from .io import extract_sensor_id, load_tms_raw_from_uploads, parse_tms_records
+from .io import extract_sensor_id, parse_tms_records, write_tms_raw_uploads_to_store
 from .metadata import METADATA_COLUMNS, apply_metadata
 from .orchestrate import process_tms_pipeline
-from .params import WILDCARD_KEYS, match_mask
+from .params import WILDCARD_KEYS, first_match, identity_mask
 from .production import PRODUCTION_COLUMNS, build_production
 
 __all__ = [
@@ -42,6 +42,7 @@ __all__ = [
     "apply_calibration", "apply_correction", "apply_metadata", "assign_temperature_levels",
     "build_production", "daily_group_mean", "daily_stats", "detect_final_qc", "detect_gaps",
     "detect_initial_qc", "extract_sensor_id", "field_event_flags", "group_mean",
-    "infer_step_minutes", "load_tms_raw_from_uploads", "match_mask",
+    "infer_step_minutes", "first_match", "identity_mask",
     "merge_and_dedupe", "parse_tms_records", "process_tms_pipeline", "resample_stats",
+    "write_tms_raw_uploads_to_store",
 ]

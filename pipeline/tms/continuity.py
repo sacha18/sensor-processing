@@ -14,12 +14,33 @@ import logging
 
 import pandas as pd
 
+from .. import store
 from .config import DEFAULT_STEP_MIN, GAP_TOLERANCE
 from .io import download_sort_key
 
 logger = logging.getLogger(__name__)
 
 VALUE_COLS = ["t1_raw", "t2_raw", "t3_raw", "signal_raw"]
+
+_DUP_REPORT_QUERY = f"""
+SELECT sensor_id, timestamp, COUNT(*) AS n_dup,
+       {", ".join(f'COUNT(DISTINCT {c}) AS n_distinct_{c}' for c in VALUE_COLS)},
+       ({" OR ".join(f'COUNT(DISTINCT {c}) > 1' for c in VALUE_COLS)}) AS conflicting
+FROM raw_wide
+GROUP BY sensor_id, timestamp
+HAVING COUNT(*) > 1
+"""
+
+_MERGE_QUERY = """
+SELECT * EXCLUDE (rn) FROM (
+    SELECT raw_wide.*, row_number() OVER (
+        PARTITION BY raw_wide.sensor_id, raw_wide.timestamp
+        ORDER BY k.dl_year DESC, k.dl_month DESC, k.dl_day DESC, k.dl_part DESC
+    ) AS rn
+    FROM raw_wide JOIN file_keys k ON raw_wide.source_file = k.source_file
+) WHERE rn = 1
+ORDER BY sensor_id, timestamp
+"""
 
 
 def infer_step_minutes(ts: pd.Series) -> int:
@@ -34,23 +55,23 @@ def infer_step_minutes(ts: pd.Series) -> int:
 
 
 def merge_and_dedupe(raw_wide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    dup_counts = raw_wide.groupby(["sensor_id", "timestamp"]).size()
-    dup_keys = dup_counts[dup_counts > 1].reset_index(name="n_dup")
+    """Overlapping timestamps are resolved by keeping the row from whichever
+    file was downloaded last - a DuckDB window function (ranked by a small
+    per-file sort-key table, not a Python `.map()` over every row) replaces
+    the old sort + drop_duplicates(keep='last')."""
+    sources = {"raw_wide": raw_wide}
+    dup_report = store.sql_df(_DUP_REPORT_QUERY, sources)
 
-    nunique = raw_wide.groupby(["sensor_id", "timestamp"])[VALUE_COLS].nunique().reset_index()
-    dup_report = dup_keys.merge(nunique, on=["sensor_id", "timestamp"])
-    dup_report["conflicting"] = (dup_report[VALUE_COLS] > 1).any(axis=1)
-    dup_report = dup_report.rename(columns={c: f"n_distinct_{c}" for c in VALUE_COLS})
-
-    out = raw_wide.copy()
-    out["_sort_key"] = out["source_file"].map(download_sort_key)
-    out = (
-        out.sort_values("_sort_key")
-        .drop_duplicates(subset=["sensor_id", "timestamp"], keep="last")
-        .drop(columns="_sort_key")
-        .sort_values(["sensor_id", "timestamp"])
-        .reset_index(drop=True)
+    # download_sort_key parses (year, month, day, part) from a filename via
+    # regex - computed once per distinct source_file (not once per row like
+    # the old `.map()` over the whole column) and joined in.
+    unique_files = raw_wide["source_file"].unique()
+    file_keys = pd.DataFrame(
+        [(f, *download_sort_key(f)) for f in unique_files],
+        columns=["source_file", "dl_year", "dl_month", "dl_day", "dl_part"],
     )
+    out = store.sql_df(_MERGE_QUERY, {"raw_wide": raw_wide, "file_keys": file_keys})
+
     logger.info("TMS merge_and_dedupe: %d row(s) in, %d row(s) out, %d duplicate (sensor, timestamp) pair(s) "
                 "across %d sensor(s)", len(raw_wide), len(out), len(dup_report), raw_wide["sensor_id"].nunique())
     return out, dup_report

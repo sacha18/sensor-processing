@@ -32,7 +32,7 @@ from .config import (
 )
 from .dedupe import dedupe
 from .gapfill import donor_fill, fit_donor_regression, gap_fill, interp_short_gaps
-from .io import load_raw, load_raw_from_uploads, parse_units_mapping, resolve_data_dir
+from .io import parse_units_mapping, resolve_data_dir, sensor_id_of_part, write_raw_dir_to_store, write_raw_uploads_to_store
 from .orchestrate import process_pipeline, run_pipeline
 from .outliers import detect_outliers, flatline_flags, hampel_flags, percentile_flags, rate_flags
 from .postprocess import aggregate, smooth
@@ -45,7 +45,7 @@ __all__ = [
     "SMOOTH_METHOD", "SMOOTH_WINDOW", "STEP_MIN", "SUPPORTED_EXTENSIONS",
     "USE_DONOR_REGRESSION",
     "dedupe", "donor_fill", "fit_donor_regression", "gap_fill", "interp_short_gaps",
-    "load_raw", "load_raw_from_uploads", "parse_units_mapping", "resolve_data_dir",
+    "parse_units_mapping", "resolve_data_dir", "sensor_id_of_part", "write_raw_dir_to_store", "write_raw_uploads_to_store",
     "process_pipeline", "run_pipeline",
     "detect_outliers", "flatline_flags", "hampel_flags", "percentile_flags", "rate_flags",
     "aggregate", "smooth",

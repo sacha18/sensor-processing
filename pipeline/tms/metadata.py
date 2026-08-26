@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .. import store
+
 METADATA_COLUMNS = [
     "sensor_id", "group_key", "site", "treatment", "position", "position_depth",
     "row", "transect", "depth_cm", "t1_label", "t2_label", "t3_label",
@@ -19,36 +21,51 @@ METADATA_COLUMNS = [
 ]
 _EXTRA_COLUMNS = [c for c in METADATA_COLUMNS if c != "sensor_id"]
 
+# A reading can match more than one install period if they overlap for the
+# same sensor - a plain (not deduplicating) INNER JOIN reproduces that
+# one-input-row -> N-output-rows fan-out exactly like the original
+# iterrows()-per-metadata-row loop did.
+_JOIN_QUERY = f"""
+WITH meta AS (
+    SELECT *, row_number() OVER () - 1 AS install_id FROM metadata_df
+)
+SELECT merged.*, {", ".join(f'meta."{c}"' for c in _EXTRA_COLUMNS)}, meta.install_id
+FROM merged
+JOIN meta
+    ON CAST(merged.sensor_id AS VARCHAR) = CAST(meta.sensor_id AS VARCHAR)
+    AND (meta.install_start IS NULL OR merged.timestamp >= meta.install_start)
+    AND (meta.install_end IS NULL OR merged.timestamp <= meta.install_end)
+ORDER BY merged.sensor_id, merged.timestamp
+"""
+
+_ANTI_JOIN_QUERY = """
+WITH meta AS (SELECT * FROM metadata_df)
+SELECT merged.* FROM merged
+WHERE NOT EXISTS (
+    SELECT 1 FROM meta
+    WHERE CAST(merged.sensor_id AS VARCHAR) = CAST(meta.sensor_id AS VARCHAR)
+    AND (meta.install_start IS NULL OR merged.timestamp >= meta.install_start)
+    AND (meta.install_end IS NULL OR merged.timestamp <= meta.install_end)
+)
+ORDER BY merged.sensor_id, merged.timestamp
+"""
+
+
+def _empty_metadata_df() -> pd.DataFrame:
+    # explicit dtypes (not just an empty object-dtype frame) so DuckDB's
+    # bind-time type check on `merged.timestamp >= meta.install_start` etc.
+    # doesn't choke on a TIMESTAMP-vs-VARCHAR mismatch when there's no data.
+    dtypes = {c: "datetime64[ns]" if c in ("install_start", "install_end") else "object" for c in METADATA_COLUMNS}
+    return pd.DataFrame({c: pd.Series(dtype=dt) for c, dt in dtypes.items()})
+
 
 def apply_metadata(merged: pd.DataFrame, metadata_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    matched_mask = pd.Series(False, index=merged.index)
-    matched_parts = []
+    has_metadata = metadata_df is not None and not metadata_df.empty
+    metadata_df = metadata_df if has_metadata else _empty_metadata_df()
+    sources = {"merged": merged, "metadata_df": metadata_df}
 
-    if metadata_df is not None and not metadata_df.empty:
-        for install_id, row in metadata_df.reset_index(drop=True).iterrows():
-            mask = merged["sensor_id"].astype(str) == str(row["sensor_id"])
-            if pd.notna(row.get("install_start")):
-                mask &= merged["timestamp"] >= row["install_start"]
-            if pd.notna(row.get("install_end")):
-                mask &= merged["timestamp"] <= row["install_end"]
-            if not mask.any():
-                continue
-            sub = merged.loc[mask].copy()
-            for c in _EXTRA_COLUMNS:
-                sub[c] = row.get(c)
-            sub["install_id"] = install_id
-            matched_parts.append(sub)
-            matched_mask |= mask
+    with_metadata = store.sql_df(_JOIN_QUERY, sources)
+    excluded = store.sql_df(_ANTI_JOIN_QUERY, sources)
+    excluded["reason"] = "outside_install_period" if has_metadata else "no_metadata_configured"
 
-    if matched_parts:
-        with_metadata = pd.concat(matched_parts, ignore_index=True).sort_values(["sensor_id", "timestamp"]).reset_index(drop=True)
-    else:
-        with_metadata = merged.iloc[0:0].copy()
-        for c in _EXTRA_COLUMNS:
-            with_metadata[c] = pd.Series(dtype="object")
-        with_metadata["install_id"] = pd.Series(dtype="int64")
-
-    excluded = merged.loc[~matched_mask].copy()
-    excluded["reason"] = "outside_install_period" if (metadata_df is not None and not metadata_df.empty) else "no_metadata_configured"
-
-    return with_metadata, excluded.reset_index(drop=True)
+    return with_metadata, excluded

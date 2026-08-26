@@ -12,29 +12,32 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .params import match_mask
+from .params import first_match
 
-CORRECTION_FORMULAS = {
-    "one_factor": lambda signal, row: row["factor_a"] * signal,
-    "two_factor": lambda signal, row: row["factor_a"] * signal + row["factor_b"],
-}
+_EXTRA_COLS = ["sensor_id", "correction_type", "factor_a", "factor_b"]
 
 
 def apply_correction(qc: pd.DataFrame, correction_params: pd.DataFrame) -> pd.DataFrame:
     out = qc.copy()
-    out["signal_corrected"] = np.nan
-    out["correction_id"] = pd.Series(dtype="object")
+    matched = first_match(out, correction_params, _EXTRA_COLS)
 
-    if correction_params is not None and not correction_params.empty:
-        for _, row in correction_params.iterrows():
-            formula = CORRECTION_FORMULAS.get(row.get("correction_type"))
-            if formula is None:
-                continue
-            mask = match_mask(out, row) & out["signal_corrected"].isna()
-            if not mask.any():
-                continue
-            out.loc[mask, "signal_corrected"] = formula(out.loc[mask, "signal_qc"], row)
-            out.loc[mask, "correction_id"] = f"{row['sensor_id']}:{row['correction_type']}"
+    signal = out["signal_qc"].astype(float)
+    # .astype("float64"): an all-NULL factor_a/factor_b column (e.g. every
+    # matched row is one_factor, so factor_b is never set) comes back from
+    # DuckDB as a nullable Int type, not DOUBLE - force float64 so the
+    # arithmetic below can't silently degrade to dtype=object.
+    factor_a = pd.to_numeric(matched["factor_a"], errors="coerce").astype("float64")
+    factor_b = pd.to_numeric(matched["factor_b"], errors="coerce").astype("float64")
+    is_one = matched["correction_type"] == "one_factor"
+    is_two = matched["correction_type"] == "two_factor"
+
+    corrected = pd.Series(np.nan, index=out.index)
+    corrected = corrected.where(~is_one, factor_a * signal)
+    corrected = corrected.where(~is_two, factor_a * signal + factor_b)
+    out["signal_corrected"] = corrected
+
+    label = matched["sensor_id"].astype(str) + ":" + matched["correction_type"].astype(str)
+    out["correction_id"] = np.where(is_one | is_two, label, np.nan)
 
     out["is_qc_missing_correction_params"] = out["signal_corrected"].isna() & out["signal_qc"].notna()
     return out

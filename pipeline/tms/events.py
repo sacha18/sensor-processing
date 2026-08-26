@@ -9,29 +9,40 @@ not just single-sensor exclusions.
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
-from .params import WILDCARD_KEYS
+from .. import store
 
-
-def _is_wildcard(value) -> bool:
-    return pd.isna(value) or str(value).strip().lower() in WILDCARD_KEYS
+_QUERY = """
+SELECT r.__row_id AS __row_id,
+       EXISTS (
+           SELECT 1 FROM ev
+           WHERE (
+               ev.sensor_id IS NULL OR lower(trim(CAST(ev.sensor_id AS VARCHAR))) IN ('*', 'all', '')
+               OR CAST(r.sensor_id AS VARCHAR) = CAST(ev.sensor_id AS VARCHAR)
+           )
+           AND (
+               ev.treatment IS NULL OR lower(trim(CAST(ev.treatment AS VARCHAR))) IN ('*', 'all', '')
+               OR CAST(r.treatment AS VARCHAR) = CAST(ev.treatment AS VARCHAR)
+           )
+           AND (ev."start" IS NULL OR r.timestamp >= ev."start")
+           AND (ev."end" IS NULL OR r.timestamp <= ev."end")
+       ) AS flag
+FROM r
+ORDER BY r.__row_id
+"""
 
 
 def field_event_flags(out: pd.DataFrame, channel: str, field_events: pd.DataFrame) -> pd.Series:
-    flags = pd.Series(False, index=out.index)
     if field_events is None or field_events.empty:
-        return flags
+        return pd.Series(False, index=out.index)
     ev = field_events[field_events["channel"].isin([channel, "all"])]
-    for _, row in ev.iterrows():
-        mask = pd.Series(True, index=out.index)
-        if not _is_wildcard(row.get("sensor_id")):
-            mask &= out["sensor_id"].astype(str) == str(row["sensor_id"])
-        if "treatment" in ev.columns and not _is_wildcard(row.get("treatment")):
-            mask &= out["treatment"].astype(str) == str(row["treatment"])
-        if pd.notna(row.get("start")):
-            mask &= out["timestamp"] >= row["start"]
-        if pd.notna(row.get("end")):
-            mask &= out["timestamp"] <= row["end"]
-        flags |= mask
-    return flags
+    if ev.empty:
+        return pd.Series(False, index=out.index)
+
+    r = out[["sensor_id", "treatment", "timestamp"]].reset_index(drop=True).copy()
+    r["__row_id"] = np.arange(len(r))
+    result = store.sql_df(_QUERY, {"r": r, "ev": ev})
+    result = result.sort_values("__row_id")
+    return pd.Series(result["flag"].to_numpy(dtype=bool), index=out.index)
