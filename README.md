@@ -6,6 +6,28 @@ A platform for cleaning, QC-ing, and homogenizing environmental sensor data. It 
 
 It takes raw logger exports in, and produces a cleaned, gap-filled, documented dataset out — with every intermediate step cached, inspectable, and reproducible. The pipeline layer (`backend/pipeline/`) is split into a TMS-specific package and a shared, pipeline-agnostic toolbox, so a future second pipeline can reuse the common building blocks instead of starting from scratch.
 
+## User Interface Overview
+
+### Browse Datasets
+Explore all published datasets with search and filtering capabilities. View dataset metadata including sensor counts, date ranges, and file sizes.
+
+![Browse Datasets](docs/screenshots/browse-datasets.png)
+
+### My Drafts
+Manage your in-progress pipeline sessions before publishing. Resume work on any session or delete drafts you no longer need.
+
+![My Drafts](docs/screenshots/drafts.png)
+
+### Run a New Pipeline
+Start a new TMS pipeline run by uploading raw sensor files. Choose between Quick Start (minimal config) or Automated mode (reuse settings from previous runs). The wizard guides you through seven stages: Load → Metadata → Initial QC → Correction → Calibration → Final QC → Production.
+
+![Run Pipeline](docs/screenshots/run-pipeline.png)
+
+### Dataset Detail & Analysis
+Once published, explore datasets with interactive time series charts, monthly statistics, and download options (Parquet, CSV). View summary statistics by sensor and channel.
+
+![Dataset Detail](docs/screenshots/dataset-detail.png)
+
 ## Architecture
 
 ```
