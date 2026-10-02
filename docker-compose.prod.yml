@@ -7,63 +7,66 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    networks:
+      - sdp-network
 
   # FastAPI backend
   api:
-    build: ./backend
-    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --workers 2
+    expose:
+      - "8000"
     environment:
       REDIS_URL: redis://redis:6379
       SDP_STORE_DIR: /data/store
       SDP_STORE_TTL_DAYS: ${SDP_STORE_TTL_DAYS:-30}
       PYTHONPATH: /app
     volumes:
-      - sdp_data:/data
-      - ./backend:/app/backend
+      - /data/sensor-data-processor:/data  # Map to host for persistence
     depends_on:
       - redis
     restart: unless-stopped
+    networks:
+      - sdp-network
 
   # RQ Worker - 1 worker is enough for 5 users
   worker:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: rq worker default high low --url redis://redis:6379 --logging_level INFO
     environment:
       REDIS_URL: redis://redis:6379
       SDP_STORE_DIR: /data/store
       PYTHONPATH: /app
     volumes:
-      - sdp_data:/data
-      - ./backend:/app/backend
+      - /data/sensor-data-processor:/data  # Map to host for persistence
     depends_on:
       - redis
     restart: unless-stopped
+    networks:
+      - sdp-network
 
-  # React Frontend (development mode)
+  # React Frontend (production build with nginx)
   frontend:
-    build: ./frontend
-    command: npm run dev -- --host 0.0.0.0
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${FRONTEND_API_URL:-http://localhost:8000}
     ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "80:80"
     depends_on:
       - api
     restart: unless-stopped
-
-  # DuckDB CLI for debugging (run with: docker compose run --rm duckdb /data/store/...)
-  duckdb-cli:
-    image: datacatering/duckdb
-    profiles: ["tools"]
-    volumes:
-      - sdp_data:/data:ro
-    entrypoint: ["duckdb"]
+    networks:
+      - sdp-network
 
 volumes:
-  sdp_data:
   redis_data:
+
+networks:
+  sdp-network:
+    driver: bridge

@@ -1,0 +1,15 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.0
+pydantic-settings==2.6.0
+rq==1.16.2
+redis==5.2.0
+websockets==12.0
+python-multipart==0.0.9
+
+# Pipeline dependencies (shared with existing pipeline/)
+duckdb==1.5.5
+pandas==3.0.3
+numpy==2.5.0
+openpyxl==3.1.5
+pyarrow==19.0.0
